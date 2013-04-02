@@ -10,16 +10,15 @@
   "keywords": [
     "load",
     "balancer",
+    "cluster",
     "zero",
-    "downtime"
+    "downtime",
+    "reload"
   ],
   "author": "spion",
   "license": "MIT",
   "devDependencies": {
     "request": "~2.16.6",
     "ncp": "~0.4.2"
-  },
-  "dependencies": {
-    "optimist": "~0.3.5"
   }
 }
