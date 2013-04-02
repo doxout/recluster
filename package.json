@@ -1,0 +1,25 @@
+{
+  "name": "recluster",
+  "version": "0.0.1",
+  "description": "Clustering library with support for zero-downtime reloading",
+  "main": "index.js",
+  "scripts": {
+    "test": "nodeunit test"
+  },
+  "repository": "",
+  "keywords": [
+    "load",
+    "balancer",
+    "zero",
+    "downtime"
+  ],
+  "author": "spion",
+  "license": "MIT",
+  "devDependencies": {
+    "request": "~2.16.6",
+    "ncp": "~0.4.2"
+  },
+  "dependencies": {
+    "optimist": "~0.3.5"
+  }
+}
