@@ -9,12 +9,11 @@ cluster.js and add:
 
 ```js
 var recluster = require('recluster'),
-    path = require('path'),
-    split = require('split');
+    path = require('path');
  
 var cluster = recluster(path.join(__dirname, 'server.js'));
-
 cluster.run();
+
 console.log("spawned cluster, kill -s SIGUSR2", process.pid, "to reload");
 ```
 
