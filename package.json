@@ -6,7 +6,10 @@
   "scripts": {
     "test": "nodeunit test"
   },
-  "repository": "",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/doxout/recluster.git"
+  },
   "keywords": [
     "load",
     "balancer",
@@ -20,5 +23,10 @@
   "devDependencies": {
     "request": "~2.16.6",
     "ncp": "~0.4.2"
+  },
+  "readmeFilename": "README.md",
+  "gitHead": "00dcf38ed8e8198da83e350372f92237f81677d7",
+  "directories": {
+    "test": "test"
   }
 }

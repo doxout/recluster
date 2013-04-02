@@ -1,9 +1,9 @@
 
 var numCPUs = require('os').cpus().length;
-var isProduction = process.env.NODE_ENV == 'production';
 var cluster = require('cluster');
-var EE = require('events').EventEmitter;
+var EE      = require('events').EventEmitter;
 
+var isProduction = process.env.NODE_ENV == 'production';
 
 function each(obj, fn) {
     for (var key in obj) fn(key, obj[key]);
