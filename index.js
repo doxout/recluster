@@ -29,7 +29,7 @@ module.exports = function(file, opt) {
 
     opt = opt || {};
     opt.workers = opt.workers || numCPUs;
-    opt.timeout = opt.timeout || isProduction ? 3600 : 0.5;
+    opt.timeout = opt.timeout || isProduction ? 3600 : 1;
     opt.respawn = opt.respawn || 1;
     opt.port = opt.port || process.env.PORT || 3000;
 
@@ -92,12 +92,17 @@ module.exports = function(file, opt) {
         if (!cluster.isMaster) return;
         respawners.cancel();
         each(cluster.workers, function(id, worker) {
-            setTimeout(worker.disconnect.bind(worker), 1);
-            var timeout = setTimeout(worker.kill.bind(worker), opt.timeout * 1000);
-            worker.on('disconnect', clearTimeout.bind(this, timeout));
+            //setTimeout(worker.disconnect.bind(worker), 1);
+            //setTimeout(cluster.once.bind(cluster, 'listening',worker.disconnect.bind(worker)), 1);
+            cluster.once('listening', function() {
+                var timeout = setTimeout(worker.kill.bind(worker), opt.timeout * 1000);
+                worker.on('disconnect', clearTimeout.bind(this, timeout));
+                worker.disconnect();
+            });
         });
         for (var i = 0; i < opt.workers; ++i) 
             cluster.fork();
+ 
     };
 
 
