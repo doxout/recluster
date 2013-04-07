@@ -1,6 +1,6 @@
 {
   "name": "recluster",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Clustering library with support for zero-downtime reloading",
   "main": "index.js",
   "scripts": {
@@ -20,10 +20,6 @@
   ],
   "author": "spion",
   "license": "MIT",
-  "devDependencies": {
-    "request": "~2.16.6",
-    "ncp": "~0.4.2"
-  },
   "readmeFilename": "README.md",
   "gitHead": "00dcf38ed8e8198da83e350372f92237f81677d7",
   "directories": {
