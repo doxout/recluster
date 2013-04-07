@@ -1,16 +1,30 @@
 var nlb = require('../index.js'),
-    request = require('request'),
     path = require('path'),
-    fs = require('fs'),
-    ncp = require('ncp');
+    http = require('http'),
+    fs = require('fs');
 
 var balancer = null;
 
 serverjs = path.join(__dirname, 'lib', 'server.js');
 
+function request(opt, cb) {
+    http.get(opt.url, function(res) {
+        if (res.statusCode == 200) return cb(null);
+        return cb(res.statusCode);
+    }).on('error', cb);
+}
+
+
 function setServer(file, done) {
     try {
-        ncp(path.join(__dirname, 'lib', file), serverjs, done);
+        var source = path.join(__dirname, 'lib', file);
+        fs.readFile(source, function(err, data) {
+            if (err) return done(err);
+            fs.writeFile(serverjs, data, function(err) {
+                if (err) return done(err);
+                return done();
+            });
+        });
     } catch (e) {
         console.log("Error setting server", e);
         done(e);
@@ -25,23 +39,6 @@ exports.setUp = function(done) {
         balancer.once('listening', function(){ done(); });
         balancer.run();
     });
-}
-
-exports["simple balancer"] = function(t) {
-    t.expect(1);
-    request({url: 'http://localhost:8000/1'}, function(err, res, body) {
-        t.ok(!err, "Response received");
-        t.done();
-    });
-
-}
-exports["reload in the middle of a request"] = function(t) {
-    t.expect(1);
-    request({url: 'http://localhost:8000/100'}, function(err, res, body) {
-        t.ok(!err, "Response received");
-        t.done();
-    });
-    setTimeout(balancer.reload.bind(balancer), 50);
 }
 
 
@@ -64,6 +61,26 @@ exports["broken server"] = function(t) {
         }
     });  
 };
+
+exports["reload in the middle of a request"] = function(t) {
+    t.expect(1);
+    request({url: 'http://localhost:8000/100'}, function(err, res, body) {
+        t.ok(!err, "Response received");
+        t.done();
+    });
+    setTimeout(balancer.reload.bind(balancer), 50);
+}
+
+exports["simple balancer"] = function(t) {
+    t.expect(1);
+    request({url: 'http://localhost:8000/1'}, function(err, res, body) {
+        t.ok(!err, "Response received");
+        t.done();
+    });
+
+}
+
+
 
 exports.tearDown = function(done) {
     balancer.terminate();
