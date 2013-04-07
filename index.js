@@ -1,13 +1,12 @@
-
 var numCPUs = require('os').cpus().length;
 var cluster = require('cluster');
 var EE      = require('events').EventEmitter;
 
-var isProduction = process.env.NODE_ENV == 'production';
 
-function each(obj, fn) {
-    for (var key in obj) fn(key, obj[key]);
-}
+function each(obj, fn) { for (var key in obj) fn(key, obj[key]); }
+
+
+var isProduction = process.env.NODE_ENV == 'production';
 
 /**
  * Creates a load balancer
@@ -18,24 +17,15 @@ function each(obj, fn) {
  * @param opt.respawn {Number} minimum time between worker respawns when workers die
  * @return - the balancer. To run it, use balancer.run(); to reload, balancer.reload() 
  */
-
-
-var respawner = 0;
-
-if (!cluster.isMaster) return;
 module.exports = function(file, opt) {
-
-
 
     opt = opt || {};
     opt.workers = opt.workers || numCPUs;
-    opt.timeout = opt.timeout || isProduction ? 3600 : 1;
+    opt.timeout = opt.timeout || (isProduction ? 3600 : 1);
     opt.respawn = opt.respawn || 1;
     opt.port = opt.port || process.env.PORT || 3000;
 
     var self = new EE();
-
-
 
     var respawners = (function() {
         var items = [];
@@ -53,7 +43,7 @@ module.exports = function(file, opt) {
             items.splice(items.indexOf(t), 1);
         };
         return self;
-    }(respawner));
+    }());
 
 
     var lastSpawn = Date.now();
@@ -88,38 +78,50 @@ module.exports = function(file, opt) {
 
     }
 
-   self.reload = function() {
+    self.reload = function() {
         if (!cluster.isMaster) return;
         respawners.cancel();
+        var oldWorkers = Object.keys(cluster.workers);
+
         each(cluster.workers, function(id, worker) {
-            //setTimeout(worker.disconnect.bind(worker), 1);
-            //setTimeout(cluster.once.bind(cluster, 'listening',worker.disconnect.bind(worker)), 1);
-            cluster.once('listening', function() {
+
+           function allListening(cb) {
+               var listenCount = opt.workers;
+               var self = this;
+               return function(worker) {
+                   if (!--listenCount) cb.apply(self, arguments);
+               };
+           }
+           var stopOld = allListening(function() {
                 var timeout = setTimeout(worker.kill.bind(worker), opt.timeout * 1000);
                 worker.on('disconnect', clearTimeout.bind(this, timeout));
-                worker.disconnect();
+                // possible leftover worker that has no channel estabilished will throw
+                try { worker.disconnect(); } catch (e) { }
+                cluster.removeListener('listening', stopOld);
             });
+
+            cluster.on('listening', stopOld);
         });
         for (var i = 0; i < opt.workers; ++i) 
             cluster.fork();
  
     };
 
-
     self.terminate = function() {
         if (!cluster.isMaster) return;
+        try {
         cluster.removeListener('exit', workerExit);
-        cluster.removeListener('listening', workerExit);
+        cluster.removeListener('listening', workerListening);
         respawners.cancel();
         each(cluster.workers, function(id, worker) {
-            worker.kill();
+            worker.kill('SIGKILL');
         });
+        } catch (e) {
+            console.log("terminate error", e);
+        }
     }
 
     return self;
 
 };
-
-
-
 
