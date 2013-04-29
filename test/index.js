@@ -82,11 +82,12 @@ exports["server with an endless setInterval"] = function(t) {
     setServer('server-unclean.js', function(err) {
         t.ok(!err, "Changing to unending server");
         balancer.reload();
+        setTimeout(balancer.reload.bind(balancer), 100);
         setTimeout(function() {
             var workerIds = Object.keys(require('cluster').workers);
             t.equals(workerIds.length, 2, "Two workers are active");
             t.done(); // this test will never end
-        }, 800)
+        }, 900)
         
     })
 }
