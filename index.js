@@ -32,7 +32,7 @@ module.exports = function(file, opt) {
         var self = {};
         self.cancel = function() {
             items.forEach(function(item) {
-                clearTimeout(items);
+                clearTimeout(item);
             });
             items = [];
         };
@@ -47,7 +47,7 @@ module.exports = function(file, opt) {
 
 
     var lastSpawn = Date.now();
-    function workerExit(worker, code, signal) {
+    function workerExit(worker) {
         if (worker.suicide) return;
         var now = Date.now();
         var nextSpawn = Math.max(now, lastSpawn + opt.respawn * 1000),
@@ -81,20 +81,20 @@ module.exports = function(file, opt) {
     self.reload = function() {
         if (!cluster.isMaster) return;
         respawners.cancel();
-        var oldWorkers = Object.keys(cluster.workers);
 
         each(cluster.workers, function(id, worker) {
 
            function allListening(cb) {
                var listenCount = opt.workers;
                var self = this;
-               return function(worker) {
+               return function() {
                    if (!--listenCount) cb.apply(self, arguments);
                };
            }
            var stopOld = allListening(function() {
-                var timeout = setTimeout(worker.kill.bind(worker), opt.timeout * 1000);
-                worker.on('disconnect', clearTimeout.bind(this, timeout));
+                var killfn = worker.kill ? worker.kill.bind(worker) : worker.destroy.bind(worker);
+                var timeout = setTimeout(killfn, opt.timeout * 1000);
+                worker.on('exit', clearTimeout.bind(this, timeout));
                 // possible leftover worker that has no channel estabilished will throw
                 try { worker.disconnect(); } catch (e) { }
                 cluster.removeListener('listening', stopOld);
@@ -114,7 +114,10 @@ module.exports = function(file, opt) {
         cluster.removeListener('listening', workerListening);
         respawners.cancel();
         each(cluster.workers, function(id, worker) {
-            worker.kill('SIGKILL');
+            if (worker.kill)
+                worker.kill('SIGKILL');
+            else
+                worker.destroy();
         });
         } catch (e) {
             console.log("terminate error", e);
