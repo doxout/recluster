@@ -1,10 +1,10 @@
 {
   "name": "recluster",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Clustering library with support for zero-downtime reloading",
   "main": "index.js",
   "scripts": {
-    "test": "nodeunit test"
+    "test": "tap test/index.js"
   },
   "repository": {
     "type": "git",
@@ -24,5 +24,8 @@
   "gitHead": "00dcf38ed8e8198da83e350372f92237f81677d7",
   "directories": {
     "test": "test"
+  },
+  "devDependencies": {
+    "tap": "~0.4.1"
   }
 }
