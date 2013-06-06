@@ -96,8 +96,12 @@ module.exports = function(file, opt) {
            var stopOld = allListening(function() {
                 var killfn = worker.kill ? worker.kill.bind(worker) 
                                          : worker.destroy.bind(worker);
-                var timeout = setTimeout(killfn, opt.timeout * 1000);
-                worker.on('exit', clearTimeout.bind(this, timeout));
+                if (opt.timeout > 0) {
+                    var timeout = setTimeout(killfn, opt.timeout * 1000);
+                    worker.on('exit', clearTimeout.bind(this, timeout));
+                } else {
+                    killfn();
+                }
                 // possible leftover worker that has no channel estabilished will throw
                 try { worker.disconnect(); } catch (e) { }
                 cluster.removeListener('listening', stopOld);
