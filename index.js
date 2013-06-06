@@ -54,10 +54,10 @@ module.exports = function(file, opt) {
             time = nextSpawn - now;
             lastSpawn = nextSpawn;
 
-        console.log('worker ' + worker.id + ' died, respawning in', time);
+        console.log('worker #' + worker._rc_wid + ' (' + worker.id + ') died, respawning in', time);
         var respawner = setTimeout(function() { 
             respawners.done(respawner);
-            cluster.fork();
+            cluster.fork({WORKER_ID: worker._rc_wid})._rc_wid = worker._rc_wid;
         }, time);
 
         respawners.add(respawner);
@@ -67,11 +67,13 @@ module.exports = function(file, opt) {
         self.emit('listening', w, adr);            
     }
 
+    
     self.run = function() {
         if (!cluster.isMaster) return;
         cluster.setupMaster({exec: file});
-        for (var i = 0; i < opt.workers; i++) 
-            cluster.fork();
+        for (var i = 0; i < opt.workers; i++) {
+            cluster.fork({WORKER_ID: i})._rc_wid = i;
+        }
         
         cluster.on('exit', workerExit);
         cluster.on('listening', workerListening);
@@ -92,7 +94,8 @@ module.exports = function(file, opt) {
                };
            }
            var stopOld = allListening(function() {
-                var killfn = worker.kill ? worker.kill.bind(worker) : worker.destroy.bind(worker);
+                var killfn = worker.kill ? worker.kill.bind(worker) 
+                                         : worker.destroy.bind(worker);
                 var timeout = setTimeout(killfn, opt.timeout * 1000);
                 worker.on('exit', clearTimeout.bind(this, timeout));
                 // possible leftover worker that has no channel estabilished will throw
@@ -103,7 +106,7 @@ module.exports = function(file, opt) {
             cluster.on('listening', stopOld);
         });
         for (var i = 0; i < opt.workers; ++i) 
-            cluster.fork();
+            cluster.fork({WORKER_ID: i})._rc_wid = i;
  
     };
 

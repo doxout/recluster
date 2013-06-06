@@ -1,5 +1,8 @@
 var http = require('http');
 
+if (null == process.env.WORKER_ID) 
+    throw new Error("env.WORKER_ID not set!");
+
 var s = http.createServer(function(req, res) {
     var params = req.url.split('/').slice(1);
     setTimeout(function() { 
