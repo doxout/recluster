@@ -30,6 +30,13 @@ To hot-reload the server, simply run
     
     kill -s SIGUSR2 <cluster_pid>
 
+To find out which of the N (= number of cores by default) worker
+instances you're running from inside server.js, you can use 
+
+    process.env.WORKER_ID
+
+which is zero-based i.e. 0 <= WORKER_ID < N
+
 # options
 
     var cluster = recluster(file, opt)
@@ -53,6 +60,11 @@ Defaults to 1 second in development, 1 hour in production.
 ### opt.respawn 
 
 Minimum time between worker respawns when workers die (seconds)
+
+### opt.backoff
+
+Maximum respawn time (reached via exponential backoff). Set to
+0 or undefined to disable exponential backoff.
 
 # cluster
 

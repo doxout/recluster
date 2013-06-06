@@ -22,7 +22,7 @@ module.exports = function(file, opt) {
     opt = opt || {};
     opt.workers = opt.workers || numCPUs;
     opt.timeout = opt.timeout || (isProduction ? 3600 : 1);
-    opt.respawn = opt.respawn || 1;
+    var optrespawn = opt.respawn || 1;    
     opt.port = opt.port || process.env.PORT || 3000;
 
     var self = new EE();
@@ -50,9 +50,15 @@ module.exports = function(file, opt) {
     function workerExit(worker) {
         if (worker.suicide) return;
         var now = Date.now();
-        var nextSpawn = Math.max(now, lastSpawn + opt.respawn * 1000),
+        var nextSpawn = Math.max(now, lastSpawn + optrespawn * 1000),
             time = nextSpawn - now;
             lastSpawn = nextSpawn;
+
+        // Exponential backoff.
+        if (opt.backoff) {
+            optrespawn *= 2;
+            setTimeout(function() { optrespawn /= 2; }, opt.backoff * 1000)
+        }
 
         console.log('worker #' + worker._rc_wid + ' (' + worker.id + ') died, respawning in', time);
         var respawner = setTimeout(function() { 
