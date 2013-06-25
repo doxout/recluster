@@ -51,6 +51,17 @@ module.exports = function(file, opt) {
 
 
     var lastSpawn = Date.now();
+
+    function delayedDecreaseBackoff() {
+        if (backoffTimer) clearTimeout(backoffTimer);
+        backoffTimer = setTimeout(function() { 
+            backoffTimer = null;
+            optrespawn = optrespawn / 2; 
+            if (optrespawn >= opt.respawn * 2)
+                decreaseBackoff();
+        }, opt.backoff * 1000);
+    }
+
     function workerExit(worker) {
         if (worker.suicide) return;
         var now = Date.now();
@@ -61,11 +72,7 @@ module.exports = function(file, opt) {
         // Exponential backoff.
         if (opt.backoff) {
             optrespawn *= 2;
-            if (backoffTimer) clearTimeout(backoffTimer);
-            backoffTimer = setTimeout(function() { 
-                backoffTimer = null;
-                optrespawn = optrespawn / 2; 
-            }, opt.backoff * 1000);
+            delayedDecreaseBackoff();
         }
 
         console.log('worker #' + worker._rc_wid 
