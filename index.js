@@ -46,13 +46,10 @@ module.exports = function(file, opt) {
     }());
 
 
-    var lastSpawn = Date.now();
     function workerExit(worker) {
         if (worker.suicide) return;
         var now = Date.now();
-        var nextSpawn = Math.max(now, lastSpawn + optrespawn * 1000),
-            time = nextSpawn - now;
-            lastSpawn = nextSpawn;
+            time = optrespawn * 1000;
 
         // Exponential backoff.
         if (opt.backoff) {
@@ -60,7 +57,8 @@ module.exports = function(file, opt) {
             setTimeout(function() { optrespawn /= 2; }, opt.backoff * 1000)
         }
 
-        console.log('worker #' + worker._rc_wid + ' (' + worker.id + ') died, respawning in', time);
+        console.log('worker #' + worker._rc_wid 
+                    + ' (' + worker.id + ') died, respawning in', time);
         var respawner = setTimeout(function() { 
             respawners.done(respawner);
             cluster.fork({WORKER_ID: worker._rc_wid})._rc_wid = worker._rc_wid;
@@ -108,7 +106,8 @@ module.exports = function(file, opt) {
                 } else {
                     killfn();
                 }
-                // possible leftover worker that has no channel estabilished will throw
+                // possible leftover worker that has no channel estabilished 
+                // will throw
                 try { worker.disconnect(); } catch (e) { }
                 cluster.removeListener('listening', stopOld);
             });
@@ -123,15 +122,15 @@ module.exports = function(file, opt) {
     self.terminate = function() {
         if (!cluster.isMaster) return;
         try {
-        cluster.removeListener('exit', workerExit);
-        cluster.removeListener('listening', workerListening);
-        respawners.cancel();
-        each(cluster.workers, function(id, worker) {
-            if (worker.kill)
-                worker.kill('SIGKILL');
-            else
-                worker.destroy();
-        });
+            cluster.removeListener('exit', workerExit);
+            cluster.removeListener('listening', workerListening);
+            respawners.cancel();
+            each(cluster.workers, function(id, worker) {
+                if (worker.kill)
+                    worker.kill('SIGKILL');
+                else
+                    worker.destroy();
+            });
         } catch (e) {
             console.log("terminate error", e);
         }
