@@ -13,16 +13,17 @@ var isProduction = process.env.NODE_ENV == 'production';
  * @param file        {String} path to the module that defines the server
  * @param opt         {Object} options
  * @param opt.workers {Number} number of active workers
- * @param opt.timeout {Number} timeout to kill old workers after reload (seconds)
- * @param opt.respawn {Number} minimum time between worker respawns when workers die
- * @return - the balancer. To run it, use balancer.run(); to reload, balancer.reload() 
+ * @param opt.timeout {Number} kill timeout for old workers after reload (sec)
+ * @param opt.respawn {Number} min time between respawns when workers die
+ * @param opt.backoff {Number} max time between respawns when workers die
+ * @return - the balancer. To run, use balancer.run() reload, balancer.reload()
  */
 module.exports = function(file, opt) {
 
     opt = opt || {};
     opt.workers = opt.workers || numCPUs;
     opt.timeout = opt.timeout || (isProduction ? 3600 : 1);
-    var optrespawn = opt.respawn || 1;    
+    var state = { optrespawn:  opt.respawn || 1 }
     opt.port = opt.port || process.env.PORT || 3000;
 
     var self = new EE();
@@ -46,15 +47,20 @@ module.exports = function(file, opt) {
     }());
 
 
+    var lastSpawn = Date.now();
     function workerExit(worker) {
         if (worker.suicide) return;
         var now = Date.now();
-            time = optrespawn * 1000;
+        var nextSpawn = Math.max(now, lastSpawn + state.optrespawn * 1000),
+            time = nextSpawn - now;
+            lastSpawn = nextSpawn;
 
         // Exponential backoff.
         if (opt.backoff) {
-            optrespawn *= 2;
-            setTimeout(function() { optrespawn /= 2; }, opt.backoff * 1000)
+            state.optrespawn *= 2;
+            setTimeout(function() { 
+                state.optrespawn = state.optrespawn / 2; 
+            }, opt.backoff * 1000);
         }
 
         console.log('worker #' + worker._rc_wid 
@@ -122,15 +128,15 @@ module.exports = function(file, opt) {
     self.terminate = function() {
         if (!cluster.isMaster) return;
         try {
-            cluster.removeListener('exit', workerExit);
-            cluster.removeListener('listening', workerListening);
-            respawners.cancel();
-            each(cluster.workers, function(id, worker) {
-                if (worker.kill)
-                    worker.kill('SIGKILL');
-                else
-                    worker.destroy();
-            });
+        cluster.removeListener('exit', workerExit);
+        cluster.removeListener('listening', workerListening);
+        respawners.cancel();
+        each(cluster.workers, function(id, worker) {
+            if (worker.kill)
+                worker.kill('SIGKILL');
+            else
+                worker.destroy();
+        });
         } catch (e) {
             console.log("terminate error", e);
         }
