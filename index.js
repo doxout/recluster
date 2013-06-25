@@ -58,7 +58,7 @@ module.exports = function(file, opt) {
             backoffTimer = null;
             optrespawn = optrespawn / 2; 
             if (optrespawn >= opt.respawn * 2)
-                decreaseBackoff();
+                delayedDecreaseBackoff();
         }, opt.backoff * 1000);
     }
 
