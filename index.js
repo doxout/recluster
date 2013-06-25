@@ -57,7 +57,7 @@ module.exports = function(file, opt) {
         backoffTimer = setTimeout(function() { 
             backoffTimer = null;
             optrespawn = optrespawn / 2; 
-            if (optrespawn < opt.respawn)
+            if (optrespawn <= opt.respawn)
                 optrespawn = opt.respawn;
             else
                 delayedDecreaseBackoff();
@@ -68,12 +68,10 @@ module.exports = function(file, opt) {
         if (worker.suicide) return;
         var now = Date.now();
 
-        var respawnAfter = optrespawn;
-
         if (opt.backoff) 
-            respawnAfter = Math.min(optrespawn, opt.backoff);
+            optrespawn = Math.min(optrespawn, opt.backoff);
 
-        var nextSpawn = Math.max(now, lastSpawn + respawnAfter * 1000),
+        var nextSpawn = Math.max(now, lastSpawn + optrespawn * 1000),
             time = nextSpawn - now;
             lastSpawn = nextSpawn;
 
