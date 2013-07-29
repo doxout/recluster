@@ -83,4 +83,6 @@ for `opt.timeout` seconds after reload
 
 Terminates the entire cluster and removes all listeners.
 
+![Bitdeli ba](https://d2weczhvl823v0.cloudfront.net/spion/recluster/trend.png)
+
 
