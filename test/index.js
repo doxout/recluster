@@ -82,6 +82,26 @@ runTest("broken server", function(t) {
 });
 
 
+runTest("old workers dont respond", function(t) {
+    setServer('server-unclean.js', function(err) {
+        t.ok(!err, "Changing to unending server");
+        balancer.reload();
+        setServer('server-ok.js', function(err) {
+            t.ok(!err, "Changing to normal server");
+            var responses = 0, n = 10;
+            for (var k = 0; k < n; ++k)
+                request({
+                    url: 'http://localhost:8000/1'
+                }, function(err) {
+                    t.ok(!err, 'new worker sent response');
+                    if (++responses == n) t.end();
+                });
+        });
+        
+    })
+});
+
+
 
 runTest("reload in the middle of a request", function(t) {
     t.plan(1);
