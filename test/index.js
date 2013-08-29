@@ -27,21 +27,24 @@ function setServer(file, done) {
             });
         });
     } catch (e) {
-        console.log("Error setting server", e);
+        console.log("Error setting server", e, file);
         done(e);
     }
 }
 
 
-function setUp(file) {
+function setUp(opt) {
     return function setUp(t) {
-        setServer(file, function(err) {
+        setServer(opt.file, function(err) {
             if (err) throw err;
-            balancer = nlb(path.join(__dirname, 'lib', 'server.js'), {
+            var options = {
                 respawn: 0.1, 
                 workers:2, 
-                timeout: 0.5
-            });
+                timeout: 0.3
+            };
+            for (var key in opt) options[key] = opt[key];
+
+            balancer = nlb(path.join(__dirname, 'lib', 'server.js'), options);
             balancer.once('listening', function(){ t.end(); });
             balancer.run();
         });
@@ -54,16 +57,16 @@ function tearDown(t) {
 }
 
 
-function runTest(desc, file, testfn) {
+function runTest(desc, opt, testfn) {
     if (!testfn) { 
-        testfn = file;
-        file = 'server-ok.js';
+        testfn = opt;
+        opt = {file: 'server-ok.js'};
     }
     
     tap.test(desc, function(t) {
-        t.test('setup', setUp(file))
-        t.test(desc, testfn);
-        t.test('teardown', tearDown);
+        t.test('-> setup', setUp(opt))
+        t.test('-> ' + desc, testfn);
+        t.test('-> teardown', tearDown);
     });
 };
 
@@ -77,7 +80,7 @@ runTest("simple balancer", function(t) {
 });
 
 
-runTest("async server", "server-async.js", function(t) {
+runTest("async server", {file: "server-async.js"}, function(t) {
     t.plan(1);
     request({url: 'http://localhost:8000/1'}, function(err) {
         t.ok(!err, "Response received");
