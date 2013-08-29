@@ -133,10 +133,10 @@ module.exports = function(file, opt) {
                 // possible leftover worker that has no channel estabilished 
                 // will throw
                 try { worker.disconnect(); } catch (e) { }
-                cluster.removeListener('listening', stopOld);
+                cluster.removeListener('online', stopOld);
             });
 
-            cluster.on('listening', stopOld);
+            cluster.on('online', stopOld);
         });
         for (var i = 0; i < opt.workers; ++i) 
             cluster.fork({WORKER_ID: i})._rc_wid = i;
