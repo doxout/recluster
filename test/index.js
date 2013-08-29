@@ -10,9 +10,12 @@ var serverjs = path.join(__dirname, 'lib', 'server.js');
 
 function request(opt, cb) {
     http.get(opt.url, function(res) {
-        if (res.statusCode == 200) return cb(null);
+        if (res.statusCode == 200) 
+            return cb(null);
         return cb(res.statusCode);
-    }).on('error', cb);
+    }).on('error', function(err) {
+        cb(err || "Generic error");
+    });
 }
 
 
@@ -41,11 +44,12 @@ function setUp(opt) {
                 respawn: 0.1, 
                 workers:2, 
                 timeout: 0.3
+                //readyWhen: 'started'
             };
             for (var key in opt) options[key] = opt[key];
 
             balancer = nlb(path.join(__dirname, 'lib', 'server.js'), options);
-            balancer.once('listening', function(){ t.end(); });
+            balancer.once('ready', function() { t.end(); });
             balancer.run();
         });
     }
@@ -72,28 +76,33 @@ function runTest(desc, opt, testfn) {
 
 
 runTest("simple balancer", function(t) {
-    t.plan(1);
     request({url: 'http://localhost:8000/1'}, function(err) {
-        t.ok(!err, "Response received");
+        t.ok(!err, "response should have no error");
+        t.end();
+    });
+});
+
+runTest("async server fails if readyWhen = started", 
+        {file: "server-async.js", readyWhen: 'started'}, function(t) {
+    request({url: 'http://localhost:9000/1'}, function(err) {
+        t.ok(err, "response should have error: " + err);
         t.end();
     });
 });
 
 
 runTest("async server", {file: "server-async.js"}, function(t) {
-    t.plan(1);
-    request({url: 'http://localhost:8000/1'}, function(err) {
-        t.ok(!err, "Response received");
+    request({url: 'http://localhost:9000/1'}, function(err) {
+        t.ok(!err, "response should have no error");
         t.end();
     });
 });
 
 
 
-
 runTest("broken server", function(t) {
     setServer('server-broken.js', function(err) {
-        t.ok(!err, "changing to broken server");
+        t.ok(!err, "changing to broken server should work");
         balancer.reload();
         setTimeout(setServer.bind(this, 'server-ok.js', afterOk), 150);
         function afterOk(err) {
@@ -102,7 +111,7 @@ runTest("broken server", function(t) {
                 request({
                     url: 'http://localhost:8000/1'
                 }, function(err) {
-                    t.ok(!err, "Response received");
+                    t.ok(!err, "response should have no error");
                     t.end();
                 }); 
             }, 150);
@@ -111,7 +120,6 @@ runTest("broken server", function(t) {
 });
 
 runTest("reload in the middle of a request", function(t) {
-    t.plan(1);
     request({url: 'http://localhost:8000/100'}, function(err) {
         t.ok(!err, "Response received");
         t.end();
@@ -130,7 +138,7 @@ runTest("old workers dont respond", function(t) {
                 request({
                     url: 'http://localhost:8000/1'
                 }, function(err) {
-                    t.ok(!err, 'new worker sent response');
+                    t.ok(!err, 'new worker sent response ' + err);
                     if (++responses == n) t.end();
                 });
         });
@@ -139,7 +147,6 @@ runTest("old workers dont respond", function(t) {
 });
 
 runTest("server with an endless setInterval", function(t) {
-    t.plan(2);
     setServer('server-unclean.js', function(err) {
         t.ok(!err, "Changing to unending server");
         balancer.reload();

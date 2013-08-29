@@ -66,6 +66,15 @@ Minimum time between worker respawns when workers die (seconds)
 Maximum respawn time (reached via exponential backoff). Set to
 0 or undefined to disable exponential backoff.
 
+### opt.readyWhen
+
+Use 'listening' for servers (e.g. for express/connect http servers)
+and 'started' for workers that are immediately ready. (e.g. queue
+workers)
+
+When set to 'listening' (default), new workers will start replacing 
+old ones when they are finished listening on a port.
+
 # cluster
 
 The returned object has the following methods:
@@ -83,6 +92,6 @@ for `opt.timeout` seconds after reload
 
 Terminates the entire cluster and removes all listeners.
 
-![Bitdeli ba](https://d2weczhvl823v0.cloudfront.net/spion/recluster/trend.png)
+![Bitdeli](https://d2weczhvl823v0.cloudfront.net/spion/recluster/trend.png)
 
 

@@ -10,12 +10,14 @@ var isProduction = process.env.NODE_ENV == 'production';
 
 /**
  * Creates a load balancer
- * @param file        {String} path to the module that defines the server
- * @param opt         {Object} options
- * @param opt.workers {Number} number of active workers
- * @param opt.timeout {Number} kill timeout for old workers after reload (sec)
- * @param opt.respawn {Number} min time between respawns when workers die
- * @param opt.backoff {Number} max time between respawns when workers die
+ * @param file          {String} path to the module that defines the server
+ * @param opt           {Object} options
+ * @param opt.workers   {Number} number of active workers
+ * @param opt.timeout   {Number} kill timeout for old workers after reload (sec)
+ * @param opt.respawn   {Number} min time between respawns when workers die
+ * @param opt.backoff   {Number} max time between respawns when workers die
+ * @param opt.readyWhen {String} when does the worker become ready? 'listening' or 'started'
+ * @param opt.log       {Object} log to stdout (default: {respawns: true})
  * @return - the balancer. To run, use balancer.run() reload, balancer.reload()
  */
 module.exports = function(file, opt) {
@@ -23,13 +25,21 @@ module.exports = function(file, opt) {
     opt = opt || {};
     opt.workers = opt.workers || numCPUs;
     opt.timeout = opt.timeout || (isProduction ? 3600 : 1);
-    var optrespawn =  opt.respawn || 1;
+    opt.readyWhen = opt.readyWhen || 'listening';
+    opt.log = opt.log || {respawns: true};
 
+    var optrespawn =  opt.respawn || 1;
     var backoffTimer;
 
-    opt.port = opt.port || process.env.PORT || 3000;
 
     var self = new EE();
+
+
+    var readyEvent = opt.readyWhen == 'started' ? 'online' :
+                     opt.readyWhen == 'listening' ? 'listening' :
+                     'message';      
+
+    var readyCommand = opt.readyWhen;
 
     var respawners = (function() {
         var items = [];
@@ -81,8 +91,9 @@ module.exports = function(file, opt) {
             delayedDecreaseBackoff();
         }
 
-        console.log('worker #' + worker._rc_wid 
-                    + ' (' + worker.id + ') died, respawning in', time);
+        if (opt.log.respawns) 
+            console.log('worker #' + worker._rc_wid 
+                        + ' (' + worker.id + ') died, respawning in', time);
         var respawner = setTimeout(function() { 
             respawners.done(respawner);
             cluster.fork({WORKER_ID: worker._rc_wid})._rc_wid = worker._rc_wid;
@@ -91,20 +102,33 @@ module.exports = function(file, opt) {
         respawners.add(respawner);
 
     }
-    function workerListening(w, adr) {
-        self.emit('listening', w, adr);            
-    }
+    function workerListening(w, adr) { self.emit('listening', w, adr); }
+    function workerOnline(w) { self.emit('online', w); }
 
+
+
+    function redirectWorkerMessage(worker) {
+        return function(message) {
+            self.emit('message', worker, message);
+        }
+    };
     
     self.run = function() {
         if (!cluster.isMaster) return;
         cluster.setupMaster({exec: file});
         for (var i = 0; i < opt.workers; i++) {
-            cluster.fork({WORKER_ID: i})._rc_wid = i;
+            var w = cluster.fork({WORKER_ID: i});
+            w._rc_wid = i;
+            w.on('message', redirectWorkerMessage(w));
         }
         
         cluster.on('exit', workerExit);
         cluster.on('listening', workerListening);
+        cluster.on('online', workerOnline);
+        
+        self.on(readyEvent, function workerReady(w, arg) {
+            self.emit('ready', w, arg);
+        });   
 
     }
 
@@ -114,14 +138,18 @@ module.exports = function(file, opt) {
 
         each(cluster.workers, function(id, worker) {
 
-           function allListening(cb) {
+           function allReady(cb) {
                var listenCount = opt.workers;
                var self = this;
-               return function() {
+               return function(w, arg) {
+                   // ignore unrelated messages when readyEvent = message
+                   if (readyEvent == 'message' 
+                       && (!arg || arg.cmd != readyCommand)) return;
+
                    if (!--listenCount) cb.apply(self, arguments);
                };
            }
-           var stopOld = allListening(function() {
+           var stopOld = allReady(function() {
                 var killfn = worker.kill ? worker.kill.bind(worker) 
                                          : worker.destroy.bind(worker);
                 if (opt.timeout > 0) {
@@ -133,21 +161,23 @@ module.exports = function(file, opt) {
                 // possible leftover worker that has no channel estabilished 
                 // will throw
                 try { worker.disconnect(); } catch (e) { }
-                cluster.removeListener('online', stopOld);
+                self.removeListener('ready', stopOld);
             });
 
-            cluster.on('online', stopOld);
+            self.on('ready', stopOld);
         });
-        for (var i = 0; i < opt.workers; ++i) 
-            cluster.fork({WORKER_ID: i})._rc_wid = i;
- 
+        for (var i = 0; i < opt.workers; ++i) {
+            var w = cluster.fork({WORKER_ID: i});
+            w._rc_wid = i;
+            w.on('message', redirectWorkerMessage(w));
+        }
     };
 
     self.terminate = function() {
         if (!cluster.isMaster) return;
-        try {
         cluster.removeListener('exit', workerExit);
         cluster.removeListener('listening', workerListening);
+        cluster.removeListener('online', workerOnline);
         respawners.cancel();
         each(cluster.workers, function(id, worker) {
             if (worker.kill)
@@ -155,9 +185,7 @@ module.exports = function(file, opt) {
             else
                 worker.destroy();
         });
-        } catch (e) {
-            console.log("terminate error", e);
-        }
+        self.removeAllListeners();
     }
 
     return self;
