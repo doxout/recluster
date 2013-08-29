@@ -69,11 +69,16 @@ Maximum respawn time (reached via exponential backoff). Set to
 ### opt.readyWhen
 
 Use 'listening' for servers (e.g. for express/connect http servers)
-and 'started' for workers that are immediately ready. (e.g. queue
-workers)
+and 'started' for workers that are immediately ready.
 
-When set to 'listening' (default), new workers will start replacing 
-old ones when they are finished listening on a port.
+If you want to manually tell recluster when the worker is ready to replace
+older workers you can use `{readyWhen: 'ready'}`. Then, to signal readiness 
+from the worker use `process.send({cmd: 'ready'})` 
+ 
+### opt.log
+
+Log various events to stdout. Currently only 'respawns' is supported.
+Default: `{respawns: true}`
 
 # cluster
 

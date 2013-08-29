@@ -49,7 +49,9 @@ function setUp(opt) {
             for (var key in opt) options[key] = opt[key];
 
             balancer = nlb(path.join(__dirname, 'lib', 'server.js'), options);
-            balancer.once('ready', function() { t.end(); });
+            balancer.once('ready', function() { 
+                t.end(); 
+            });
             balancer.run();
         });
     }
@@ -97,6 +99,15 @@ runTest("async server", {file: "server-async.js"}, function(t) {
         t.end();
     });
 });
+
+runTest("manual ready signal", 
+        {file: "server-manual-ready.js", readyWhen: 'ready'}, function(t) {
+    request({url: 'http://localhost:9001/1'}, function(err) {
+        t.ok(!err, "response should have no error");
+        t.end();
+    });
+});
+
 
 
 

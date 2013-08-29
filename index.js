@@ -127,6 +127,9 @@ module.exports = function(file, opt) {
         cluster.on('online', workerOnline);
         
         self.on(readyEvent, function workerReady(w, arg) {
+            // ignore unrelated messages when readyEvent = message
+            if (readyEvent == 'message' 
+                && (!arg || arg.cmd != readyCommand)) return;
             self.emit('ready', w, arg);
         });   
 
@@ -142,10 +145,6 @@ module.exports = function(file, opt) {
                var listenCount = opt.workers;
                var self = this;
                return function(w, arg) {
-                   // ignore unrelated messages when readyEvent = message
-                   if (readyEvent == 'message' 
-                       && (!arg || arg.cmd != readyCommand)) return;
-
                    if (!--listenCount) cb.apply(self, arguments);
                };
            }
