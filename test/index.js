@@ -33,17 +33,19 @@ function setServer(file, done) {
 }
 
 
-function setUp(t) {
-    setServer('server-ok.js', function(err) {
-        if (err) throw err;
-        balancer = nlb(path.join(__dirname, 'lib', 'server.js'), {
-            respawn: 0.2, 
-            workers:2, 
-            timeout: 0.6
+function setUp(file) {
+    return function setUp(t) {
+        setServer(file, function(err) {
+            if (err) throw err;
+            balancer = nlb(path.join(__dirname, 'lib', 'server.js'), {
+                respawn: 0.1, 
+                workers:2, 
+                timeout: 0.5
+            });
+            balancer.once('listening', function(){ t.end(); });
+            balancer.run();
         });
-        balancer.once('listening', function(){ t.end(); });
-        balancer.run();
-    });
+    }
 }
 
 function tearDown(t) {
@@ -52,21 +54,45 @@ function tearDown(t) {
 }
 
 
-function runTest(desc, testfn) {
+function runTest(desc, file, testfn) {
+    if (!testfn) { 
+        testfn = file;
+        file = 'server-ok.js';
+    }
+    
     tap.test(desc, function(t) {
-        t.test('setup', setUp)
+        t.test('setup', setUp(file))
         t.test(desc, testfn);
         t.test('teardown', tearDown);
     });
 };
 
 
+runTest("simple balancer", function(t) {
+    t.plan(1);
+    request({url: 'http://localhost:8000/1'}, function(err) {
+        t.ok(!err, "Response received");
+        t.end();
+    });
+});
+
+
+runTest("async server", "server-async.js", function(t) {
+    t.plan(1);
+    request({url: 'http://localhost:8000/1'}, function(err) {
+        t.ok(!err, "Response received");
+        t.end();
+    });
+});
+
+
+
+
 runTest("broken server", function(t) {
-    t.plan(3);
     setServer('server-broken.js', function(err) {
         t.ok(!err, "changing to broken server");
         balancer.reload();
-        setTimeout(setServer.bind(this, 'server-ok.js', afterOk), 300);
+        setTimeout(setServer.bind(this, 'server-ok.js', afterOk), 150);
         function afterOk(err) {
             t.ok(!err, "changing to okay server");
             setTimeout(function() { 
@@ -76,11 +102,19 @@ runTest("broken server", function(t) {
                     t.ok(!err, "Response received");
                     t.end();
                 }); 
-            }, 300);
+            }, 150);
         }
     });  
 });
 
+runTest("reload in the middle of a request", function(t) {
+    t.plan(1);
+    request({url: 'http://localhost:8000/100'}, function(err) {
+        t.ok(!err, "Response received");
+        t.end();
+    });
+    setTimeout(balancer.reload.bind(balancer), 10);
+});
 
 runTest("old workers dont respond", function(t) {
     setServer('server-unclean.js', function(err) {
@@ -101,17 +135,6 @@ runTest("old workers dont respond", function(t) {
     })
 });
 
-
-
-runTest("reload in the middle of a request", function(t) {
-    t.plan(1);
-    request({url: 'http://localhost:8000/100'}, function(err) {
-        t.ok(!err, "Response received");
-        t.end();
-    });
-    setTimeout(balancer.reload.bind(balancer), 50);
-});
-
 runTest("server with an endless setInterval", function(t) {
     t.plan(2);
     setServer('server-unclean.js', function(err) {
@@ -126,14 +149,4 @@ runTest("server with an endless setInterval", function(t) {
         
     })
 });
-
-runTest("simple balancer", function(t) {
-    t.plan(1);
-    request({url: 'http://localhost:8000/1'}, function(err) {
-        t.ok(!err, "Response received");
-        t.end();
-    });
-});
-
-
 
