@@ -37,7 +37,7 @@ module.exports = function(file, opt) {
 
     var readyEvent = opt.readyWhen == 'started' ? 'online' :
                      opt.readyWhen == 'listening' ? 'listening' :
-                     'message';      
+                     'message';
 
     var readyCommand = opt.readyWhen;
 
@@ -64,9 +64,9 @@ module.exports = function(file, opt) {
 
     function delayedDecreaseBackoff() {
         if (backoffTimer) clearTimeout(backoffTimer);
-        backoffTimer = setTimeout(function() { 
+        backoffTimer = setTimeout(function() {
             backoffTimer = null;
-            optrespawn = optrespawn / 2; 
+            optrespawn = optrespawn / 2;
             if (optrespawn <= opt.respawn)
                 optrespawn = opt.respawn;
             else
@@ -75,10 +75,11 @@ module.exports = function(file, opt) {
     }
 
     function workerExit(worker) {
+        self.emit('exit', worker);
         if (worker.suicide) return;
         var now = Date.now();
 
-        if (opt.backoff) 
+        if (opt.backoff)
             optrespawn = Math.min(optrespawn, opt.backoff);
 
         var nextSpawn = Math.max(now, lastSpawn + optrespawn * 1000),
@@ -91,10 +92,10 @@ module.exports = function(file, opt) {
             delayedDecreaseBackoff();
         }
 
-        if (opt.log.respawns) 
-            console.log('worker #' + worker._rc_wid 
+        if (opt.log.respawns)
+            console.log('worker #' + worker._rc_wid
                         + ' (' + worker.id + ') died, respawning in', time);
-        var respawner = setTimeout(function() { 
+        var respawner = setTimeout(function() {
             respawners.done(respawner);
             cluster.fork({WORKER_ID: worker._rc_wid})._rc_wid = worker._rc_wid;
         }, time);
@@ -113,7 +114,7 @@ module.exports = function(file, opt) {
             self.emit('message', worker, message);
         }
     };
-    
+
     self.run = function() {
         if (!cluster.isMaster) return;
         cluster.setupMaster({exec: file});
@@ -122,18 +123,18 @@ module.exports = function(file, opt) {
             w._rc_wid = i;
             w.on('message', redirectWorkerMessage(w));
         }
-        
+
         cluster.on('exit', workerExit);
         cluster.on('disconnect', workerDisconnect);
         cluster.on('listening', workerListening);
         cluster.on('online', workerOnline);
-        
+
         self.on(readyEvent, function workerReady(w, arg) {
             // ignore unrelated messages when readyEvent = message
-            if (readyEvent == 'message' 
+            if (readyEvent == 'message'
                 && (!arg || arg.cmd != readyCommand)) return;
             self.emit('ready', w, arg);
-        });   
+        });
 
     }
 
@@ -151,7 +152,7 @@ module.exports = function(file, opt) {
                };
            }
            var stopOld = allReady(function() {
-                var killfn = worker.kill ? worker.kill.bind(worker) 
+                var killfn = worker.kill ? worker.kill.bind(worker)
                                          : worker.destroy.bind(worker);
                 if (opt.timeout > 0) {
                     var timeout = setTimeout(killfn, opt.timeout * 1000);
@@ -159,7 +160,7 @@ module.exports = function(file, opt) {
                 } else {
                     killfn();
                 }
-                // possible leftover worker that has no channel estabilished 
+                // possible leftover worker that has no channel estabilished
                 // will throw
                 try { worker.disconnect(); } catch (e) { }
                 self.removeListener('ready', stopOld);
@@ -193,4 +194,3 @@ module.exports = function(file, opt) {
     return self;
 
 };
-
