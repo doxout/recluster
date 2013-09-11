@@ -104,6 +104,7 @@ module.exports = function(file, opt) {
     }
     function workerListening(w, adr) { self.emit('listening', w, adr); }
     function workerOnline(w) { self.emit('online', w); }
+    function workerDisconnect(w) { self.emit('disconnect', w); }
 
 
 
@@ -123,6 +124,7 @@ module.exports = function(file, opt) {
         }
         
         cluster.on('exit', workerExit);
+        cluster.on('disconnect', workerDisconnect);
         cluster.on('listening', workerListening);
         cluster.on('online', workerOnline);
         
@@ -175,6 +177,7 @@ module.exports = function(file, opt) {
     self.terminate = function() {
         if (!cluster.isMaster) return;
         cluster.removeListener('exit', workerExit);
+        cluster.removeListener('disconnect', workerDisconnect);
         cluster.removeListener('listening', workerListening);
         cluster.removeListener('online', workerOnline);
         respawners.cancel();
