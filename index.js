@@ -75,6 +75,7 @@ module.exports = function(file, opt) {
     }
 
     function workerExit(worker) {
+        self.emit('exit', worker);
         if (worker.suicide) return;
         var now = Date.now();
 
