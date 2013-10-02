@@ -39,7 +39,7 @@ module.exports = function(file, opt) {
                      opt.readyWhen == 'listening' ? 'listening' :
                      'message';
 
-    var readyCommand = opt.readyWhen;
+    var readyCommand = 'ready';
 
     var respawners = (function() {
         var items = [];
