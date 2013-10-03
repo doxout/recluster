@@ -157,6 +157,7 @@ module.exports = function(file, opt) {
                 if (opt.timeout > 0) {
                     var timeout = setTimeout(killfn, opt.timeout * 1000);
                     worker.on('exit', clearTimeout.bind(this, timeout));
+                    worker.send({cmd: 'disconnect'});
                 } else {
                     killfn();
                 }
