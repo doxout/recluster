@@ -39,7 +39,9 @@ which is zero-based i.e. 0 <= WORKER_ID < N
 
 # options
 
-    var cluster = recluster(file, opt)
+```js
+var cluster = recluster(file, opt)
+```
 
 where 
 
@@ -68,13 +70,14 @@ Maximum respawn time (reached via exponential backoff). Set to
 
 ### opt.readyWhen
 
-Use 'listening' for servers (e.g. for express/connect http servers)
-and 'started' for workers that are immediately ready.
+Use `'listening'` for servers (e.g. for express/connect http servers)
+and `'started'` for workers that are immediately ready.
 
 If you want to manually tell recluster when the worker is ready to replace
 older workers you can use `{readyWhen: 'ready'}`. Then, to signal readiness 
 from the worker use `process.send({cmd: 'ready'})` 
- 
+
+
 ### opt.log
 
 Log various events to stdout. Currently only 'respawns' is supported.
@@ -97,6 +100,27 @@ for `opt.timeout` seconds after reload
 
 Terminates the entire cluster and removes all listeners.
 
-![Bitdeli](https://d2weczhvl823v0.cloudfront.net/spion/recluster/trend.png)
+# worker cleanup
 
+A server worker can gracefully exit by cleaning up in the 'close' event
+of its server:
+
+```js
+server.on('close', function() { 
+    // cleanup 
+});
+```
+
+Non-server workers can listen for the disconnect command and shut down
+gracefully before the kill timeout:
+
+```js
+process.on('message', function(m) { 
+    if (m.cmd == 'disconnect') { 
+        // cleanup 
+    }
+})
+```
+
+![Bitdeli](https://d2weczhvl823v0.cloudfront.net/spion/recluster/trend.png)
 

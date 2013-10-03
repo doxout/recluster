@@ -157,7 +157,10 @@ module.exports = function(file, opt) {
                 if (opt.timeout > 0) {
                     var timeout = setTimeout(killfn, opt.timeout * 1000);
                     worker.on('exit', clearTimeout.bind(this, timeout));
-                    worker.send({cmd: 'disconnect'});
+                    // possible leftover worker that has no channel 
+                    // estabilished will throw. Ignore.
+                    try { worker.send({cmd: 'disconnect'}); }
+                    catch (e) { }
                 } else {
                     killfn();
                 }
