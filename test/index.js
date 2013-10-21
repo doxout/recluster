@@ -140,17 +140,22 @@ runTest("reload in the middle of a request", function(t) {
 
 runTest("old workers dont respond", function(t) {
     setServer('server-unclean.js', function(err) {
-        t.ok(!err, "Changing to unending server");
+        t.ok(!err, "should change to unending server");
         balancer.reload();
         setServer('server-ok.js', function(err) {
-            t.ok(!err, "Changing to normal server");
+            t.ok(!err, "should change to normal server");
             var responses = 0, n = 10;
             for (var k = 0; k < n; ++k)
                 request({
                     url: 'http://localhost:8000/1'
                 }, function(err) {
-                    t.ok(!err, 'new worker sent response ' + err);
-                    if (++responses == n) t.end();
+                    t.ok(!err, 'response should be from new worker ' + err);
+                    if (++responses == n)  {
+                        var active = 
+                            Object.keys(require('cluster').workers).length;
+                        t.equals(active, 2, 'only 2 worksers should be active');
+                        t.end();
+                    }
                 });
         });
         
@@ -159,15 +164,16 @@ runTest("old workers dont respond", function(t) {
 
 runTest("server with an endless setInterval", function(t) {
     setServer('server-unclean.js', function(err) {
-        t.ok(!err, "Changing to unending server");
+        t.ok(!err, "should change to unending server");
         balancer.reload();
         setTimeout(balancer.reload.bind(balancer), 100);
         setTimeout(function() {
             var workerIds = Object.keys(require('cluster').workers);
-            t.equal(workerIds.length, 2, "Two workers are active");
+            t.equal(workerIds.length, 2, "only 2 workers should be active");
             t.end(); // this test will never end
-        }, 900)
+        }, 900);
         
     })
 });
+
 

@@ -33,6 +33,12 @@ module.exports = function(file, opt) {
 
 
     var self = new EE();
+    var channel = new EE();
+
+    function emit() {        
+        channel.emit.apply(self, arguments);
+        self.emit.apply(channel, arguments);
+    }
 
 
     var readyEvent = opt.readyWhen == 'started' ? 'online' :
@@ -40,6 +46,7 @@ module.exports = function(file, opt) {
                      'message';
 
     var readyCommand = 'ready';
+    var disconnectCommand = 'disconnect';
 
     var respawners = (function() {
         var items = [];
@@ -60,6 +67,14 @@ module.exports = function(file, opt) {
     }());
 
 
+    function fork(wid) {
+        var w = cluster.fork({WORKER_ID: wid});
+        w._rc_wid = wid;
+        w._rc_isReplaced = false;
+        w.on('message', redirectWorkerMessage(w));
+        return w;
+    }
+
     var lastSpawn = Date.now();
 
     function delayedDecreaseBackoff() {
@@ -75,9 +90,8 @@ module.exports = function(file, opt) {
     }
 
     function workerExit(worker) {
-        if (worker.suicide) return;
-        if (worker._rc_exiHandled) return;
-        worker._rc_exiHandled = true;
+        if (worker._rc_isReplaced) return;
+        worker._rc_isReplaced = true;
 
         var now = Date.now();
 
@@ -99,44 +113,46 @@ module.exports = function(file, opt) {
                         + ' (' + worker.id + ') died, respawning in', time);
         var respawner = setTimeout(function() {
             respawners.done(respawner);
-            cluster.fork({WORKER_ID: worker._rc_wid})._rc_wid = worker._rc_wid;
+            fork(worker._rc_wid);
         }, time);
 
         respawners.add(respawner);
 
     }
-    function workerListening(w, adr) { self.emit('listening', w, adr); }
-    function workerOnline(w) { self.emit('online', w); }
-    function workerDisconnect(w) { self.emit('disconnect', w); }
-    function workerEmitExit(w) { self.emit('exit', w); }
+    function workerListening(w, adr) { emit('listening', w, adr); }
+    function workerOnline(w) { emit('online', w); }
+    function workerDisconnect(w) { emit('disconnect', w); }
+    function workerEmitExit(w) { emit('exit', w); }
 
 
 
     function redirectWorkerMessage(worker) {
         return function(message) {
-            self.emit('message', worker, message);
+            emit('message', worker, message);
         }
     }
 
     self.run = function() {
         if (!cluster.isMaster) return;
         cluster.setupMaster({exec: file});
-        for (var i = 0; i < opt.workers; i++) {
-            var w = cluster.fork({WORKER_ID: i});
-            w._rc_wid = i;
-            w.on('message', redirectWorkerMessage(w));
-        }
+        for (var i = 0; i < opt.workers; i++) fork(i);
 
         cluster.on('exit', workerEmitExit);
         cluster.on('disconnect', workerDisconnect);
         cluster.on('listening', workerListening);
         cluster.on('online', workerOnline);
 
-        self.on(readyEvent, function workerReady(w, arg) {
+        channel.on(readyEvent, function workerReady(w, arg) {
             // ignore unrelated messages when readyEvent = message
-            if (readyEvent == 'message'
+            if (readyEvent === 'message'
                 && (!arg || arg.cmd != readyCommand)) return;
-            self.emit('ready', w, arg);
+            emit('ready', w, arg);
+        });
+        channel.on('exit', workerExit);
+        channel.on('disconnect', workerExit);
+        channel.on('message', function workerDisconnectMsg(w, arg) {
+            if (arg && arg.cmd === 'disconnect') 
+                workerExit(w);
         });
 
     }
@@ -157,34 +173,31 @@ module.exports = function(file, opt) {
            var stopOld = allReady(function() {
                 var killfn = worker.kill ? worker.kill.bind(worker)
                                          : worker.destroy.bind(worker);
+                // dont respawn this worker. It has already been replaced.
+                                         
+                worker._rc_isReplaced = true;
                 if (opt.timeout > 0) {
                     var timeout = setTimeout(killfn, opt.timeout * 1000);
                     worker.on('exit', clearTimeout.bind(this, timeout));
                     // possible leftover worker that has no channel 
                     // estabilished will throw. Ignore.
-                    try { worker.send({cmd: 'disconnect'}); }
-                    catch (e) { }
+                    try { 
+                        worker.send({cmd: 'disconnect'}); 
+                        worker.disconnect(); 
+                    } catch (e) { }
                 } else {
                     killfn();
                 }
-                // possible leftover worker that has no channel estabilished
-                // will throw
-                try { worker.disconnect(); } catch (e) { }
-                self.removeListener('ready', stopOld);
+                channel.removeListener('ready', stopOld);
             });
 
-            self.on('ready', stopOld);
+            channel.on('ready', stopOld);
         });
-        for (var i = 0; i < opt.workers; ++i) {
-            var w = cluster.fork({WORKER_ID: i});
-            w._rc_wid = i;
-            w.on('message', redirectWorkerMessage(w));
-        }
+        for (var i = 0; i < opt.workers; ++i) fork(i);
     };
 
     self.terminate = function() {
         if (!cluster.isMaster) return;
-        cluster.removeListener('exit', workerEmitExit);
         cluster.removeListener('exit', workerEmitExit);
         cluster.removeListener('disconnect', workerDisconnect);
         cluster.removeListener('listening', workerListening);
@@ -196,7 +209,7 @@ module.exports = function(file, opt) {
             else
                 worker.destroy();
         });
-        self.removeAllListeners();
+        channel.removeAllListeners();
     }
 
     return self;
