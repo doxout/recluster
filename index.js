@@ -66,15 +66,6 @@ module.exports = function(file, opt) {
         return self;
     }());
 
-
-    function fork(wid) {
-        var w = cluster.fork({WORKER_ID: wid});
-        w._rc_wid = wid;
-        w._rc_isReplaced = false;
-        w.on('message', redirectWorkerMessage(w));
-        return w;
-    }
-
     var lastSpawn = Date.now();
 
     function delayedDecreaseBackoff() {
@@ -89,14 +80,29 @@ module.exports = function(file, opt) {
         }, opt.backoff * 1000);
     }
 
-    function workerExit(worker) {
+
+    // Fork a new worker. Give it a recluster ID and
+    // also redirect all its messages to the cluster.
+    function fork(wid) {
+        var w = cluster.fork({WORKER_ID: wid});
+        w._rc_wid = wid;
+        w._rc_isReplaced = false;
+        w.on('message', function(message) { 
+            emit('message', w, message);
+        });
+        return w;
+    }
+
+
+    // Replace a dysfunctional worker
+    function workerReplace(worker) {
         if (worker._rc_isReplaced) return;
         worker._rc_isReplaced = true;
 
         var now = Date.now();
 
         if (opt.backoff)
-            optrespawn = Math.min(optrespawn, opt.backoff);
+            optrespawn = Math.min(optrespawn, opt.backoff);        
 
         var nextSpawn = Math.max(now, lastSpawn + optrespawn * 1000),
             time = nextSpawn - now;
@@ -119,18 +125,50 @@ module.exports = function(file, opt) {
         respawners.add(respawner);
 
     }
+
+    // Replace a worker that has closed the IPC channel
+    // or signaled that its dysfunctional. Will also
+    // terminate the worker after the specified time has
+    // passed.
+    function workerReplaceTimeoutTerminate(w) {
+        workerReplace(w);
+        killTimeout(w);
+    }
+
+
+    // Sets up a kill timeout for a worker. Closes the
+    // IPC channel immediately.
+    function killTimeout(worker) {
+        var trykillfn =function() {
+            try {
+                if (worker.kill) {
+                    worker.kill();
+                } else {
+                    worker.destroy();
+                }
+            } catch(e) {}
+        }
+
+        if (opt.timeout > 0) {
+            var timeout = setTimeout(trykillfn, opt.timeout * 1000);
+            worker.on('exit', clearTimeout.bind(this, timeout));
+            // possible leftover worker that has no channel 
+            // estabilished will throw. Ignore.
+            try { 
+                worker.send({cmd: 'disconnect'}); 
+                worker.disconnect(); 
+            } catch (e) { }
+        } else {
+            process.nextTick(trykillfn);
+        }
+ 
+    }
+
+    // Redirect most events
     function workerListening(w, adr) { emit('listening', w, adr); }
     function workerOnline(w) { emit('online', w); }
     function workerDisconnect(w) { emit('disconnect', w); }
     function workerEmitExit(w) { emit('exit', w); }
-
-
-
-    function redirectWorkerMessage(worker) {
-        return function(message) {
-            emit('message', worker, message);
-        }
-    }
 
     self.run = function() {
         if (!cluster.isMaster) return;
@@ -148,14 +186,18 @@ module.exports = function(file, opt) {
                 && (!arg || arg.cmd != readyCommand)) return;
             emit('ready', w, arg);
         });
-        channel.on('exit', workerExit);
-        channel.on('disconnect', workerExit);
+        // When a worker exits, try to replace it
+        channel.on('exit', workerReplace);
+        // When it closes the IPC channel or signals that it can no longer
+        // do any processing, replace it and then set up a termination timeout
+        channel.on('disconnect', workerReplaceTimeoutTerminate);
         channel.on('message', function workerDisconnectMsg(w, arg) {
             if (arg && arg.cmd === 'disconnect') 
-                workerExit(w);
+                workerReplaceTimeoutTerminate(w);
         });
 
     }
+
 
     self.reload = function() {
         if (!cluster.isMaster) return;
@@ -171,23 +213,11 @@ module.exports = function(file, opt) {
                };
            }
            var stopOld = allReady(function() {
-                var killfn = worker.kill ? worker.kill.bind(worker)
-                                         : worker.destroy.bind(worker);
                 // dont respawn this worker. It has already been replaced.
-                                         
                 worker._rc_isReplaced = true;
-                if (opt.timeout > 0) {
-                    var timeout = setTimeout(killfn, opt.timeout * 1000);
-                    worker.on('exit', clearTimeout.bind(this, timeout));
-                    // possible leftover worker that has no channel 
-                    // estabilished will throw. Ignore.
-                    try { 
-                        worker.send({cmd: 'disconnect'}); 
-                        worker.disconnect(); 
-                    } catch (e) { }
-                } else {
-                    killfn();
-                }
+
+                // Kill the worker after the appropriate timeout has passed
+                killTimeout(worker);
                 channel.removeListener('ready', stopOld);
             });
 
