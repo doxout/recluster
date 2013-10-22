@@ -35,6 +35,8 @@ module.exports = function(file, opt) {
     var self = new EE();
     var channel = new EE();
 
+    self.workers = [];    
+
     function emit() {        
         channel.emit.apply(self, arguments);
         self.emit.apply(channel, arguments);
@@ -90,6 +92,12 @@ module.exports = function(file, opt) {
         w.on('message', function(message) { 
             emit('message', w, message);
         });
+        w.process.on('exit', function() {
+            var windex = self.workers.indexOf(w);
+            if (windex >= 0)
+                self.workers.splice(windex, 1);            
+        });
+        self.workers.push(w);
         return w;
     }
 

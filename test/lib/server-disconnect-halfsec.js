@@ -14,9 +14,10 @@ var s = http.createServer(function(req, res) {
 s.listen(8000);
 
 setTimeout(function() {
-    process.send({cmd: 'disconnect'});
-    // But don't exit - to test termination timeout.
+    // Don't exit - to test termination timeout.
     setTimeout(function() {
-        console.log("Done with cleanup");
+        console.log('Finally cleaned up');
     }, 5000);
+
+    require('cluster').worker.disconnect();
 }, 500);

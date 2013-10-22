@@ -14,9 +14,5 @@ var s = http.createServer(function(req, res) {
 s.listen(8000);
 
 setTimeout(function() {
-    process.send({cmd: 'disconnect'});
-    // But don't exit - to test termination timeout.
-    setTimeout(function() {
-        console.log("Done with cleanup");
-    }, 5000);
+    throw new Error("Unclean exit!");
 }, 500);
