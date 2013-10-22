@@ -3,9 +3,6 @@ var cluster = require('cluster');
 var EE      = require('events').EventEmitter;
 
 
-function each(obj, fn) { for (var key in obj) fn(key, obj[key]); }
-
-
 var isProduction = process.env.NODE_ENV == 'production';
 
 /**
@@ -211,7 +208,8 @@ module.exports = function(file, opt) {
         if (!cluster.isMaster) return;
         respawners.cancel();
 
-        each(cluster.workers, function(id, worker) {
+        self.workers.forEach(function(worker) {
+            var id = worker.id;
 
            function allReady(cb) {
                var listenCount = opt.workers;
@@ -241,7 +239,7 @@ module.exports = function(file, opt) {
         cluster.removeListener('listening', workerListening);
         cluster.removeListener('online', workerOnline);
         respawners.cancel();
-        each(cluster.workers, function(id, worker) {
+        self.workers.forEach(function (worker) {
             if (worker.kill)
                 worker.kill('SIGKILL');
             else
@@ -251,5 +249,5 @@ module.exports = function(file, opt) {
     }
 
     return self;
-
 };
+
