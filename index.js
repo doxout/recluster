@@ -204,21 +204,21 @@ module.exports = function(file, opt) {
     }
 
 
-    self.reload = function() {
+    self.reload = function(cb) {
         if (!cluster.isMaster) return;
         respawners.cancel();
+        function allReady(cb) {
+            var listenCount = opt.workers;
+            var self = this;
+            return function(w, arg) {
+                if (!--listenCount) cb.apply(self, arguments);
+            };
+        }
 
         self.workers.forEach(function(worker) {
             var id = worker.id;
 
-           function allReady(cb) {
-               var listenCount = opt.workers;
-               var self = this;
-               return function(w, arg) {
-                   if (!--listenCount) cb.apply(self, arguments);
-               };
-           }
-           var stopOld = allReady(function() {
+          var stopOld = allReady(function() {
                 // dont respawn this worker. It has already been replaced.
                 worker._rc_isReplaced = true;
 
@@ -229,6 +229,7 @@ module.exports = function(file, opt) {
 
             channel.on('ready', stopOld);
         });
+        if (cb) channel.on('ready', allReady(cb));
         for (var i = 0; i < opt.workers; ++i) fork(i);
     };
 

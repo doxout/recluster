@@ -164,14 +164,15 @@ runTest("old workers dont respond", function(t) {
 runTest("server with an endless setInterval", function(t) {
     setServer('server-unclean.js', function(err) {
         t.ok(!err, "should change to unending server");
-        balancer.reload();
-        setTimeout(balancer.reload.bind(balancer), 100);
-        setTimeout(function() {
-            var workerIds = Object.keys(require('cluster').workers);
-            t.equal(workerIds.length, 2, "only 2 workers should be active");
+        balancer.reload(function() {
+            setTimeout(balancer.reload.bind(balancer, function() {
+                setTimeout(checkDead, 400); // 400 = timeout + 100ms spawntime
+            }), 10);
+        });
+        function checkDead() {
+            t.equal(balancer.workers.length, 2, "only 2 workers should be active");
             t.end(); // this test will never end
-        }, 900);
-        
+        }
     })
 });
 
@@ -212,7 +213,18 @@ var termSettings = {
     readyWhen: 'listening'
 };
 
+// kill timeout
+var timeoutKill = termSettings.timeout * 1000;
+
+// Time after which the worker dies
+var timeoutWorker = 500;
+// Time to wait for a reload to happen
+var timeToSpawn = 200;
+
+
 termSettings.file = 'server-die-halfsec.js';
+
+
 
 runTest("dying server", termSettings, function(t) {
     var wrkpids = pids();
@@ -222,7 +234,7 @@ runTest("dying server", termSettings, function(t) {
         t.notEquals(wrkpids[0], wrkpids2[0], "workers have been replaced");
         t.notEquals(wrkpids[1], wrkpids2[1], "workers have been replaced");
         t.end();
-    }, 600);
+    }, timeoutWorker + timeToSpawn);
 });
 
 
@@ -233,11 +245,11 @@ runTest("IPC-disconnecting server", discSettings, function(t) {
     var wrkpids = pids();
     setTimeout(function() {
         t.equal(pids().length, 4, "4 workers present, 2 disconnected"); 
-    }, 600);
+    }, timeoutWorker + timeToSpawn);
     setTimeout(function() {
         t.equal(pids().length, 2, "2 workers present"); 
         t.end();
-    }, 900);
+    }, timeoutWorker + timeToSpawn + timeoutKill);
 
 });
 
@@ -248,11 +260,11 @@ runTest("IPC-disconnecting server", dmsgSettings, function(t) {
     var wrkpids = pids();
     setTimeout(function() {
         t.equal(pids().length, 4, "4 workers present, 2 disconnected"); 
-    }, 600);
+    }, timeoutWorker + timeToSpawn);
     setTimeout(function() {
         t.equal(pids().length, 2, "2 workers present"); 
         t.end();
-    }, 900);
+    }, timeoutWorker + timeToSpawn + timeoutKill);
 
 });
 
