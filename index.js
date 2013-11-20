@@ -32,9 +32,9 @@ module.exports = function(file, opt) {
     var self = new EE();
     var channel = new EE();
 
-    self.workers = [];    
+    self.workers = [];
 
-    function emit() {        
+    function emit() {
         channel.emit.apply(self, arguments);
         self.emit.apply(channel, arguments);
     }
@@ -86,13 +86,13 @@ module.exports = function(file, opt) {
         var w = cluster.fork({WORKER_ID: wid});
         w._rc_wid = wid;
         w._rc_isReplaced = false;
-        w.on('message', function(message) { 
+        w.on('message', function(message) {
             emit('message', w, message);
         });
         w.process.on('exit', function() {
             var windex = self.workers.indexOf(w);
             if (windex >= 0)
-                self.workers.splice(windex, 1);            
+                self.workers.splice(windex, 1);
         });
         self.workers.push(w);
         return w;
@@ -107,7 +107,7 @@ module.exports = function(file, opt) {
         var now = Date.now();
 
         if (opt.backoff)
-            optrespawn = Math.min(optrespawn, opt.backoff);        
+            optrespawn = Math.min(optrespawn, opt.backoff);
 
         var nextSpawn = Math.max(now, lastSpawn + optrespawn * 1000),
             time = nextSpawn - now;
@@ -157,16 +157,16 @@ module.exports = function(file, opt) {
         if (opt.timeout > 0) {
             var timeout = setTimeout(trykillfn, opt.timeout * 1000);
             worker.on('exit', clearTimeout.bind(this, timeout));
-            // possible leftover worker that has no channel 
+            // possible leftover worker that has no channel
             // estabilished will throw. Ignore.
-            try { 
-                worker.send({cmd: 'disconnect'}); 
-                worker.disconnect(); 
+            try {
+                worker.send({cmd: 'disconnect'});
+                worker.disconnect();
             } catch (e) { }
         } else {
             process.nextTick(trykillfn);
         }
- 
+
     }
 
     // Redirect most events
@@ -197,7 +197,7 @@ module.exports = function(file, opt) {
         // do any processing, replace it and then set up a termination timeout
         channel.on('disconnect', workerReplaceTimeoutTerminate);
         channel.on('message', function workerDisconnectMsg(w, arg) {
-            if (arg && arg.cmd === 'disconnect') 
+            if (arg && arg.cmd === 'disconnect')
                 workerReplaceTimeoutTerminate(w);
         });
 
@@ -251,4 +251,3 @@ module.exports = function(file, opt) {
 
     return self;
 };
-
