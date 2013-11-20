@@ -121,7 +121,7 @@ module.exports = function(file, opt) {
 
         if (opt.log.respawns)
             console.log('worker #' + worker._rc_wid
-                        + ' (' + worker.id + ') died, respawning in', time);
+                        + ' (' + worker.id + ') must be replaced, respawning in', time);
         var respawner = setTimeout(function() {
             respawners.done(respawner);
             fork(worker._rc_wid);
