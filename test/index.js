@@ -268,4 +268,16 @@ runTest("IPC-disconnecting server", dmsgSettings, function(t) {
 
 });
 
+runTest("stopped cluster", termSettings, function(t) {
+    var wrkpids = pids();
+    setTimeout(function() {
+        balancer.stop();
+    }, timeToSpawn);
+    setTimeout(function() {
+        var wrkpids2 = pids(); 
+        t.equal(wrkpids2.length, 0, "0 workers should be active"); 
+        t.end();
+    }, timeoutWorker + timeToSpawn);
+});
+
 
