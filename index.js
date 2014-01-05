@@ -234,18 +234,23 @@ module.exports = function(file, opt) {
     };
 
     self.terminate = function() {
-        if (!cluster.isMaster) return;
-        cluster.removeListener('exit', workerEmitExit);
-        cluster.removeListener('disconnect', workerDisconnect);
-        cluster.removeListener('listening', workerListening);
-        cluster.removeListener('online', workerOnline);
-        respawners.cancel();
+        self.stop()
         self.workers.forEach(function (worker) {
             if (worker.kill)
                 worker.kill('SIGKILL');
             else
                 worker.destroy();
         });
+    }
+
+    self.stop = function() {
+        if (!cluster.isMaster) return;
+        cluster.removeListener('exit', workerEmitExit);
+        cluster.removeListener('disconnect', workerDisconnect);
+        cluster.removeListener('listening', workerListening);
+        cluster.removeListener('online', workerOnline);
+        respawners.cancel();
+
         channel.removeAllListeners();
     }
 
