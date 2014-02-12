@@ -231,7 +231,13 @@ module.exports = function(file, opt) {
 
             channel.on('ready', stopOld);
         });
-        if (cb) channel.on('ready', allReady(cb));
+        if (cb) {
+            var allReadyCb = allReady(function() {
+                channel.removeListener('ready', allReadyCb);
+                cb();
+            });
+            channel.on('ready', allReadyCb);
+        }
         for (var i = 0; i < opt.workers; ++i) fork(i);
     };
 
