@@ -213,27 +213,3 @@ runTest("stopped cluster", termSettings, function(t) {
     }, timeoutWorker + timeToSpawn);
 });
 
-
-
-
-/**
- * maxlistener bug
- */
-
-
-runTest('maxlisteners warning', function(t) {
-    lib.balancer.reload(function() {
-        lib.balancer.reload(function() {
-            lib.balancer.reload(function() {
-            lib.balancer.reload(function() {
-            lib.balancer.reload(function() {
-                t.ok(true, 'reloaded 5 times');
-                t.end();
-            });
-            });
-            });
-        });
-    });
-});
-
-

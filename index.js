@@ -31,8 +31,8 @@ module.exports = function(file, opt) {
 
     var self = new EE();
     var channel = new EE();
-    
-    channel.setMaxListeners(opt.workers);
+
+    channel.setMaxListeners(opt.workers * 4 + 10);
 
     self.workers = [];
 
