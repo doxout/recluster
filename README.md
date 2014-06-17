@@ -77,6 +77,10 @@ If you want to manually tell recluster when the worker is ready to replace
 older workers you can use `{readyWhen: 'ready'}`. Then, to signal readiness 
 from the worker use `process.send({cmd: 'ready'})` 
 
+### opt.args
+
+Array of arguments to pass to the worker
+
 
 ### opt.log
 
