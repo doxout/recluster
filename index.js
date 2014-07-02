@@ -14,6 +14,7 @@ var isProduction = process.env.NODE_ENV == 'production';
  * @param opt.respawn   {Number} min time between respawns when workers die
  * @param opt.backoff   {Number} max time between respawns when workers die
  * @param opt.readyWhen {String} when does the worker become ready? 'listening' or 'started'
+ * @param opt.args      {Array} arguments to pass to the worker (default: [])
  * @param opt.log       {Object} log to stdout (default: {respawns: true})
  * @return - the balancer. To run, use balancer.run() reload, balancer.reload()
  */
@@ -23,6 +24,7 @@ module.exports = function(file, opt) {
     opt.workers = opt.workers || numCPUs;
     opt.timeout = opt.timeout || (isProduction ? 3600 : 1);
     opt.readyWhen = opt.readyWhen || 'listening';
+    opt.args = opt.args || [];
     opt.log = opt.log || {respawns: true};
 
     var optrespawn =  opt.respawn || 1;
@@ -180,6 +182,7 @@ module.exports = function(file, opt) {
     self.run = function() {
         if (!cluster.isMaster) return;
         cluster.setupMaster({exec: file});
+        cluster.settings.args = opt.args;
         for (var i = 0; i < opt.workers; i++) fork(i);
 
         cluster.on('exit', workerEmitExit);
