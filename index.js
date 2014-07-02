@@ -181,7 +181,8 @@ module.exports = function(file, opt) {
 
     self.run = function() {
         if (!cluster.isMaster) return;
-        cluster.setupMaster({exec: file, args: opt.args});
+        cluster.setupMaster({exec: file});
+        cluster.settings.args = opt.args;
         for (var i = 0; i < opt.workers; i++) fork(i);
 
         cluster.on('exit', workerEmitExit);
