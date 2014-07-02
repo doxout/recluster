@@ -109,6 +109,13 @@ runTest("server with an endless setInterval", function(t) {
     })
 });
 
+runTest("server with arguments", {file: 'server-with-args.js', args: ['fail']}, function(t) {
+    request({url: 'http://localhost:8000'}, function(err) {
+        t.equal(err, 404, 'should get 404 error');
+        t.end();
+    });
+});
+
 /**
  * Termination tests
  * 1) dies ungracefully after 1/2 s (lib/server-die-halfsec.js)
