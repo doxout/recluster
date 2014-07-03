@@ -159,8 +159,9 @@ var timeoutKill = termSettings.timeout * 1000;
 // Time after which the worker dies
 var timeoutWorker = 500;
 // Time to wait for a reload to happen
-var timeToSpawn = 200;
-
+var timeToSpawn = 150;
+// Time necessary to terminate a worker
+var timeToKill = 50;
 
 termSettings.file = 'server-die-halfsec.js';
 
@@ -189,7 +190,7 @@ runTest("IPC-disconnecting server", discSettings, function(t) {
     setTimeout(function() {
         t.equal(pids().length, 2, "2 workers present");
         t.end();
-    }, timeoutWorker + timeToSpawn + timeoutKill);
+    }, timeoutWorker + timeToSpawn + timeoutKill + timeToKill);
 
 });
 
@@ -204,7 +205,7 @@ runTest("IPC-disconnecting server", dmsgSettings, function(t) {
     setTimeout(function() {
         t.equal(pids().length, 2, "2 workers present");
         t.end();
-    }, timeoutWorker + timeToSpawn + timeoutKill);
+    }, timeoutWorker + timeToSpawn + timeoutKill + timeToKill);
 
 });
 
