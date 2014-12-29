@@ -15,6 +15,7 @@ var isProduction = process.env.NODE_ENV == 'production';
  * @param opt.backoff   {Number} max time between respawns when workers die
  * @param opt.readyWhen {String} when does the worker become ready? 'listening' or 'started'
  * @param opt.log       {Object} log to stdout (default: {respawns: true})
+ * @param opt.logger    {Function} log function, needs `log` method (default: console)
  * @return - the balancer. To run, use balancer.run() reload, balancer.reload()
  */
 module.exports = function(file, opt) {
@@ -24,6 +25,8 @@ module.exports = function(file, opt) {
     opt.timeout = opt.timeout || (isProduction ? 3600 : 1);
     opt.readyWhen = opt.readyWhen || 'listening';
     opt.log = opt.log || {respawns: true};
+
+    var logger = opt.logger || console;
 
     var optrespawn =  opt.respawn || 1;
     var backoffTimer;
@@ -121,9 +124,11 @@ module.exports = function(file, opt) {
             delayedDecreaseBackoff();
         }
 
-        if (opt.log.respawns)
-            console.log('worker #' + worker._rc_wid
-                        + ' (' + worker.id + ') must be replaced, respawning in', time);
+        if (opt.log.respawns) {
+            logger.log('[' + worker.process.pid + '] worker (' + worker._rc_wid
+                        + ':' + worker.id + ') must be replaced, respawning in', time);
+        }
+
         var respawner = setTimeout(function() {
             respawners.done(respawner);
             fork(worker._rc_wid);
