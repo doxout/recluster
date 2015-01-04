@@ -15,8 +15,8 @@ var isProduction = process.env.NODE_ENV == 'production';
  * @param opt.backoff   {Number} max time between respawns when workers die
  * @param opt.readyWhen {String} when does the worker become ready? 'listening' or 'started'
  * @param opt.args      {Array} arguments to pass to the worker (default: [])
- * @param opt.log       {Object} log to stdout (default: {respawns: true})
- * @param opt.logger    {Function} log function, needs `log` method (default: console)
+ * @param opt.log       {Object} what to log to stdout (default: {respawns: true})
+ * @param opt.logger    {Function} logger to use, needs `log` method (default: console)
  * @return - the balancer. To run, use balancer.run() reload, balancer.reload()
  */
 module.exports = function(file, opt) {

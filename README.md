@@ -81,11 +81,15 @@ from the worker use `process.send({cmd: 'ready'})`
 
 Array of arguments to pass to the worker
 
-
 ### opt.log
 
 Log various events to stdout. Currently only 'respawns' is supported.
 Default: `{respawns: true}`
+
+### opt.logger
+
+Which logger to use. Requires a console-compatible log method
+Default: `console`
 
 # cluster
 
