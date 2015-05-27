@@ -4,7 +4,7 @@
   "description": "Clustering library with support for zero-downtime reloading",
   "main": "index.js",
   "scripts": {
-    "test": "tap test/index.js"
+    "test": "istanbul cover ./node_modules/.bin/_mocha -- test/index.js"
   },
   "repository": {
     "type": "git",
@@ -26,6 +26,10 @@
     "test": "test"
   },
   "devDependencies": {
-    "tap": "~0.4.1"
+    "fs-extra": "^0.18.4",
+    "istanbul": "^0.3.14",
+    "mocha": "^2.2.5",
+    "object-assign": "^2.0.0",
+    "supertest": "^1.0.1"
   }
 }

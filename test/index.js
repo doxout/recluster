@@ -1,223 +1,420 @@
-var nlb = require('../index.js'),
-    path = require('path'),
-    http = require('http'),
-    fs = require('fs'),
-    tap = require('tap');
+//moved this from package.json
+//some libraries behave better in NODE_ENV=test
+process.env.NODE_ENV='test';
 
+var request = require('supertest');
+var path = require('path');
+var recluster = require('../');
+//cluster is a singleton
+var cluster = require('cluster');
+var m = require('object-assign');
+var assert = require('assert');
+var fs = require('fs-extra');
 
+function passthru() {}
 
-var lib = require('./lib/index'),
-    runTest = lib.runTest,
-    request = lib.request;
-
-
-runTest("simple balancer", function(t) {
-    request({url: 'http://localhost:8000/1'}, function(err) {
-        t.ok(!err, "response should have no error");
-        t.end();
-    });
-});
-
-runTest("async server fails if readyWhen = started", 
-        {file: "server-async.js", readyWhen: 'started'}, function(t) {
-    request({url: 'http://localhost:9000/1'}, function(err) {
-        t.ok(err, "response should have error: " + err);
-        t.end();
-    });
-});
-
-
-runTest("async server", {file: "server-async.js"}, function(t) {
-    request({url: 'http://localhost:9000/1'}, function(err) {
-        t.ok(!err, "response should have no error");
-        t.end();
-    });
-});
-
-runTest("manual ready signal",
-        {file: "server-manual-ready.js", readyWhen: 'ready'}, function(t) {
-    request({url: 'http://localhost:9001/1'}, function(err) {
-        t.ok(!err, "response should have no error");
-        t.end();
-    });
-});
-
-
-
-
-runTest("broken server", function(t) {
-    lib.setServer('server-broken.js', function(err) {
-        t.ok(!err, "changing to broken server should work");
-        lib.balancer.reload();
-        setTimeout(lib.setServer.bind(this, 'server-ok.js', afterOk), 150);
-        function afterOk(err) {
-            t.ok(!err, "changing to okay server");
-            setTimeout(function() {
-                request({
-                    url: 'http://localhost:8000/1'
-                }, function(err) {
-                    t.ok(!err, "response should have no error");
-                    t.end();
-                });
-            }, 150);
-        }
-    });
-});
-
-runTest("reload in the middle of a request", function(t) {
-    request({url: 'http://localhost:8000/100'}, function(err) {
-        t.ok(!err, "Response received");
-        t.end();
-    });
-    setTimeout(lib.balancer.reload.bind(lib.balancer), 10);
-});
-
-runTest("old workers dont respond", function(t) {
-    lib.setServer('server-unclean.js', function(err) {
-        t.ok(!err, "should change to unending server");
-        lib.balancer.reload();
-        lib.setServer('server-ok.js', function(err) {
-            t.ok(!err, "should change to normal server");
-            var responses = 0, n = 10;
-            function requestComplete(err) {
-                t.ok(!err, 'response should be from new worker ' + err);
-                if (++responses == n)  {
-                    var active =
-                        Object.keys(require('cluster').workers).length;
-                    t.equals(active, 2, 'only 2 worksers should be active');
-                    t.end();
-                }
-            }
-            for (var k = 0; k < n; ++k)
-                request({url: 'http://localhost:8000/1'}, requestComplete);
-        });
-    })
-});
-
-runTest("server with an endless setInterval", function(t) {
-    lib.setServer('server-unclean.js', function(err) {
-        t.ok(!err, "should change to unending server");
-        lib.balancer.reload(function() {
-            setTimeout(lib.balancer.reload.bind(lib.balancer, function() {
-                setTimeout(checkDead, 400); // 400 = timeout + 100ms spawntime
-            }), 10);
-        });
-        function checkDead() {
-            t.equal(lib.balancer.workers.length, 2, "only 2 workers should be active");
-            t.end(); // this test will never end
-        }
-    })
-});
-
-runTest("server with arguments", {file: 'server-with-args.js', args: ['fail']}, function(t) {
-    request({url: 'http://localhost:8000'}, function(err) {
-        t.equal(err, 404, 'should get 404 error');
-        t.end();
-    });
-});
-
-/**
- * Termination tests
- * 1) dies ungracefully after 1/2 s (lib/server-die-halfsec.js)
- * 2) disconnects  IPC  after 1/2 s (lib/server-disconnect-halfsec.js)
- * 3) msgs 'disconnect' after 1/2 s (lib/server-msg-disconnect-halfsec.js)
- * Then test if
- * 1) they have been replaced quickly
- * 2) they have been killed after a while for (2) and (3)
- *
- * Recommended settings are:
- * respawn: 0.01 - for quick respawns
- * backoff: 0.01 - for quick respawns
- * workers: 2 - to make sure we're not testing only for one
- * timeout: 0.3 - to be able to test if timeout works
- * before the replacement tries to signal that its dead
- *
- * I know that timing-based tests are not perfect, but I have no better
- * idea at the moment.
- */
-
-
-function extend(opt, add) {
-    var res = {};
-    for (var key in opt) res[key] = opt[key];
-    for (var key in add) res[key] = add[key];
-    return res;
-}
-
-function pids() {
-    return lib.balancer.workers.map(function(w) { return w.process.pid; });
-}
-
-var termSettings = {
-    respawn: 0.001, backoff: 0.001, workers: 2, timeout: 0.3,
-    readyWhen: 'listening'
+var defaultOptions = {
+    respawn: 0.1,
+    workers: 2,
+    timeout: 1,
+    //don't spam the terminal :o
+    logger: {
+        log: passthru
+    }
 };
 
-// kill timeout
-var timeoutKill = termSettings.timeout * 1000;
+// global handler to quickly spin up recluster
+var handler;
 
-// Time after which the worker dies
-var timeoutWorker = 500;
-// Time to wait for a reload to happen
-var timeToSpawn = 150;
-// Time necessary to terminate a worker
-var timeToKill = 50;
+// dry
+function requestExpectHelloWorld200(cb) {
+    request.get('/')
+        .expect(200)
+        .end(function(err, res) {
+            if (err) throw new Error(err);
+            assert.equal(res.text, 'hello world\n');
+            if (cb) cb();
+        });
+}
 
-termSettings.file = 'server-die-halfsec.js';
+function requestExpectError(cb) {
+    request.get('/')
+        .end(function(err, res) {
+            assert(err instanceof Error, 'err should be an Error');
+            assert.equal(err.message, 'connect ECONNREFUSED 127.0.0.1:8000');
+            if (cb) cb();
+        });
+}
 
+/*
+We aren't supposed to do fancy things with this module, so calmly wait
+for everything to be cleanup up instead of rushing, it avoids all mistakes
 
+@fixme: this is probably a code smell, we should be able to have a listener when everything
+is cleaned up on recluster exposed object
+ */
+function cleanup(cb) {
+    if (Object.keys(cluster.workers).length > 0) {
+        cluster.on('exit', function exitHandler() {
+            if (Object.keys(cluster.workers).length !== 0) return;
+            cluster.removeListener('exit', exitHandler);
+            cb();
+        });
+        return handler.terminate();
+    }
+    cb();
+}
 
-runTest("dying server", termSettings, function(t) {
-    var wrkpids = pids();
-    setTimeout(function() {
-        var wrkpids2 = pids();
-        t.equal(wrkpids2.length, 2, "2 workers should be active");
-        t.notEquals(wrkpids[0], wrkpids2[0], "workers have been replaced");
-        t.notEquals(wrkpids[1], wrkpids2[1], "workers have been replaced");
-        t.end();
-    }, timeoutWorker + timeToSpawn);
+//helper to stay dry
+function setup(serverFile, options, onReady, beforeReady) {
+    onReady = onReady || passthru;
+    beforeReady = beforeReady || passthru;
+    handler = recluster(path.join(__dirname, 'lib', serverFile), options);
+    handler.run();
+    beforeReady();
+    handler.once('ready', function() {
+        onReady();
+    });
+}
+
+request = request('http://localhost:8000');
+
+describe('recluster', function() {
+
+    describe('default', function() {
+        before(function(done) {
+            setup('server.js', defaultOptions, done);
+        });
+
+        it('should have no error', function(done) {
+            requestExpectHelloWorld200(done);
+        });
+    });
+
+    describe('ready event', function() {
+        it('should fail if waiting for ready when online', function(done) {
+            var options = m({},
+                defaultOptions, {
+                    readyWhen: 'started'
+                });
+            setup('server.js', options, function() {
+                requestExpectError(done);
+            });
+        });
+
+        it('should work if waiting for ready when listening', function(done) {
+            setup('server.js', defaultOptions, function() {
+                requestExpectHelloWorld200(done);
+            }, requestExpectError);
+        });
+
+        it("should work if waiting for ready when process says he's ready", function(done) {
+            var options = m({},
+                defaultOptions, {
+                    readyWhen: 'ready'
+                });
+            setup('server-manual-ready.js', options, function() {
+                requestExpectHelloWorld200(done);
+            }, requestExpectError);
+        });
+    });
+
+    describe('gracefully handle broken script', function() {
+        it('it should throw an error', function() {
+            handler = recluster(path.join(__dirname, 'lib', 'server-broken.js'), defaultOptions);
+            //fiesta, try everything, if at the end everything close it's a win :o
+            handler.run();
+            handler.reload();
+            handler.terminate();
+        });
+    });
+
+    describe('reload', function() {
+        this.timeout(5000);
+
+        var reloaded;
+        var i;
+        var intervalHandle;
+        var tryToDoneEvery = 500;
+
+        beforeEach(function(done) {
+            reloaded = false;
+            i = 3;
+
+            //1 s timeout
+            var options = m({}, defaultOptions, {
+                timeout: 0.1
+            });
+            setup('server.js', options, done);
+        });
+
+        it('should gracefully reload in the middle of a request', function(done) {
+            //50ms request vs 100ms timeout = request successful
+            request.get('/10')
+                .expect(200)
+                .end(function(err, res) {
+                    assert(reloaded, 'reload should be true');
+                    if (err) return done(err);
+                    //the 2 previous workers are still waiting :o
+                    //while the 2 new are also here
+                    assert.equal(Object.keys(cluster.workers).length, 4);
+                    assert.equal(res.text, 'hello world\n');
+                });
+
+            setImmediate(function() {
+                handler.reload();
+                handler.once('ready', function() {
+                    reloaded = true;
+                });
+            });
+
+            intervalHandle = setInterval(function() {
+                if (Object.keys(cluster.workers).length === 2) {
+                    clearInterval(intervalHandle);
+                    return done();
+                }
+                --i;
+                if (i < 0) {
+                    clearInterval(intervalHandle);
+                    return done(new Error('recluster did not gracefully handle the reload'));
+                }
+            }, tryToDoneEvery);
+        });
+
+        it('should properly hang up if exceeds timeout', function(done) {
+            //200ms request vs 100ms timeout = socket trashed
+            request.get('/200')
+                .end(function(err, res) {
+                    assert(reloaded, 'reloaded should be true');
+                    assert.equal(err.message, 'socket hang up');
+                });
+
+            setImmediate(function() {
+                handler.reload();
+                handler.once('ready', function() {
+                    reloaded = true;
+                });
+            });
+
+            intervalHandle = setInterval(function() {
+                if (Object.keys(cluster.workers).length === 2) {
+                    clearInterval(intervalHandle);
+                    return done();
+                }
+                --i;
+                if (i < 0) {
+                    clearInterval(intervalHandle);
+                    return done(new Error('recluster did not gracefully handle the reload'));
+                }
+            }, tryToDoneEvery);
+        });
+    });
+
+    //@FIXME: help me here, no idea what we are supposed to test
+    //or even what the proper behavior SHOULD be
+    describe('undying', function() {
+        this.timeout(20000);
+
+        it('old undying workers should not respond', function(done) {
+            //copy unclean to temp
+            try {
+                fs.copySync(
+                    path.join(__dirname, 'lib', 'server-unclean.js'),
+                    path.join(__dirname, 'lib', 'server-temp.js')
+                );
+            } catch (err) {
+                done(err);
+            }
+
+            var options = m({}, defaultOptions, {
+                timeout: 1,
+                workers: 2
+            });
+
+            setup('server-temp.js', options, function() {
+                // replace classic to temp
+                try {
+                    fs.copySync(
+                        path.join(__dirname, 'lib', 'server.js'),
+                        path.join(__dirname, 'lib', 'server-temp.js')
+                    );
+                } catch (err) {
+                    done(err);
+                }
+
+                var total = 50;
+                var errorCount = 0;
+                var successCount = 0;
+                var responseCount = 0;
+
+                handler.reload(function() {
+                    assert.equal(Object.keys(cluster.workers).length, 4);
+
+                    function responseHandler(err, res) {
+                        responseCount++;
+                        if (err) {
+                            errorCount++;
+                        } else {
+                            successCount++;
+                            assert.equal(res.text, 'hello world\n');
+                        }
+                        if (responseCount === total) {
+                            console.log('errors : ' + errorCount);
+                            console.log('successes : ' + successCount);
+                            done();
+                        }
+                    }
+
+                    for (var i = 0; i < total; ++i) {
+                        request.get('/')
+                            .end(responseHandler);
+                    }
+                });
+            });
+        });
+    });
+
+    describe('arguments', function() {
+        it('without', function(done) {
+            setup('server-with-args.js', defaultOptions, function() {
+                requestExpectHelloWorld200(done);
+            });
+        });
+
+        it('should be propagated', function(done) {
+            var options = m({}, defaultOptions, {
+                args: ['fail']
+            });
+            setup('server-with-args.js', options, function() {
+                request.get('/')
+                    .expect(404)
+                    .end(function(err, res) {
+                        if (err) done(err);
+                        assert.equal(res.text, 'FAIL');
+                        done();
+                    });
+            });
+        });
+    });
+
+    // /**
+    //  * Termination tests
+    //  * 1) dies ungracefully after 1/2 s (lib/server-die-halfsec.js)
+    //  * 2) disconnects  IPC  after 1/2 s (lib/server-disconnect-halfsec.js)
+    //  * 3) msgs 'disconnect' after 1/2 s (lib/server-msg-disconnect-halfsec.js)
+    //  * Then test if
+    //  * 1) they have been replaced quickly
+    //  * 2) they have been killed after a while for (2) and (3)
+    //  *
+    //  * Recommended settings are:
+    //  * respawn: 0.01 - for quick respawns
+    //  * backoff: 0.01 - for quick respawns
+    //  * workers: 2 - to make sure we're not testing only for one
+    //  * timeout: 0.3 - to be able to test if timeout works
+    //  * before the replacement tries to signal that its dead
+    //  *
+    //  * I know that timing-based tests are not perfect, but I have no better
+    //  * idea at the moment.
+    //  */
+
+    function pids() {
+        return handler.workers.map(function(w) {
+            return w.process.pid;
+        });
+    }
+
+    var termOptions = {
+        respawn: 0.001,
+        backoff: 0.001,
+        workers: 2,
+        timeout: 0.3,
+        readyWhen: 'listening',
+        logger: {
+            log: passthru
+        }
+    };
+
+    // kill timeout
+    var timeoutKill = termOptions.timeout * 1000;
+
+    // Time after which the worker dies
+    var timeoutWorker = 500;
+    // Time to wait for a reload to happen
+    var timeToSpawn = 150;
+    // Time necessary to terminate a worker
+    var timeToKill = 50;
+
+    describe('termination', function() {
+        it('undying server should still get killed because of timeout', function(done) {
+            setup('server-die-halfsec.js', termOptions, function() {
+                var workerPids1 = pids();
+                assert.equal(workerPids1.length, 2);
+
+                setTimeout(function() {
+                    var workerPids2 = pids();
+                    assert.equal(workerPids2.length, 2);
+
+                    workerPids1.forEach(function(pid1) {
+                        workerPids2.forEach(function(pid2) {
+                            assert.notEqual(pid1, pid2);
+                        });
+                    });
+                    done();
+                }, timeoutWorker + timeToSpawn);
+            });
+        });
+
+        it('should handle disconnecting servers', function(done) {
+            this.timeout(3000);
+
+            setup('server-disconnect-halfsec.js', termOptions, function() {
+                assert.equal(pids().length, 2);
+
+                setTimeout(function() {
+                    assert.equal(pids().length, 4);
+                }, timeoutWorker + timeToSpawn);
+
+                setTimeout(function() {
+                    assert.equal(pids().length, 2);
+                }, timeoutWorker + timeToSpawn + timeoutKill + timeToKill);
+
+                setTimeout(function() {
+                    done();
+                }, 2000);
+            });
+        });
+
+        it('should handle the disconnect command', function(done) {
+            this.timeout(3000);
+
+            setup('server-msg-disconnect-halfsec.js', termOptions, function() {
+                assert.equal(pids().length, 2);
+
+                setTimeout(function() {
+                    assert.equal(pids().length, 4);
+                }, timeoutWorker + timeToSpawn);
+
+                setTimeout(function() {
+                    assert.equal(pids().length, 2);
+                }, timeoutWorker + timeToSpawn + timeoutKill + timeToKill);
+
+                setTimeout(function() {
+                    done();
+                }, 2000);
+            });
+        });
+
+        it('should stop when asked to stop', function(done) {
+            this.timeout(3000);
+
+            setup('server.js', termOptions, function() {
+                handler.stop();
+                cleanup(done);
+            });
+        });
+    });
+
+    afterEach(function(done) {
+        cleanup(done);
+    });
 });
-
-
-var discSettings = extend(
-    termSettings, {file: 'server-disconnect-halfsec.js'});
-
-runTest("IPC-disconnecting server", discSettings, function(t) {
-    var wrkpids = pids();
-    setTimeout(function() {
-        t.equal(pids().length, 4, "4 workers present, 2 disconnected");
-    }, timeoutWorker + timeToSpawn);
-    setTimeout(function() {
-        t.equal(pids().length, 2, "2 workers present");
-        t.end();
-    }, timeoutWorker + timeToSpawn + timeoutKill + timeToKill);
-
-});
-
-var dmsgSettings = extend(
-    termSettings, {file: 'server-msg-disconnect-halfsec.js'});
-
-runTest("IPC-disconnecting server", dmsgSettings, function(t) {
-    var wrkpids = pids();
-    setTimeout(function() {
-        t.equal(pids().length, 4, "4 workers present, 2 disconnected");
-    }, timeoutWorker + timeToSpawn);
-    setTimeout(function() {
-        t.equal(pids().length, 2, "2 workers present");
-        t.end();
-    }, timeoutWorker + timeToSpawn + timeoutKill + timeToKill);
-
-});
-
-runTest("stopped cluster", termSettings, function(t) {
-    var wrkpids = pids();
-    setTimeout(function() {
-        lib.balancer.stop();
-    }, timeToSpawn);
-    setTimeout(function() {
-        var wrkpids2 = pids();
-        t.equal(wrkpids2.length, 0, "0 workers should be active");
-        t.end();
-    }, timeoutWorker + timeToSpawn);
-});
-
