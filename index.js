@@ -153,7 +153,7 @@ module.exports = function(file, opt) {
     // Sets up a kill timeout for a worker. Closes the
     // IPC channel immediately.
     function killTimeout(worker) {
-        var trykillfn =function() {
+        var trykillfn = function() {
             try {
                 if (worker.kill) {
                     worker.kill();
@@ -161,7 +161,7 @@ module.exports = function(file, opt) {
                     worker.destroy();
                 }
             } catch(e) {}
-        }
+        };
 
         if (opt.timeout > 0) {
             var timeout = setTimeout(trykillfn, opt.timeout * 1000);
@@ -211,7 +211,7 @@ module.exports = function(file, opt) {
                 workerReplaceTimeoutTerminate(w);
         });
 
-    }
+    };
 
 
     self.reload = function(cb) {
@@ -250,14 +250,14 @@ module.exports = function(file, opt) {
     };
 
     self.terminate = function() {
-        self.stop()
+        self.stop();
         self.workers.forEach(function (worker) {
             if (worker.kill)
                 worker.kill('SIGKILL');
             else
                 worker.destroy();
         });
-    }
+    };
 
     self.stop = function() {
         if (!cluster.isMaster) return;
@@ -268,7 +268,7 @@ module.exports = function(file, opt) {
         respawners.cancel();
 
         channel.removeAllListeners();
-    }
+    };
 
     return self;
 };
