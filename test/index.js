@@ -1,6 +1,6 @@
 //moved this from package.json
 //some libraries behave better in NODE_ENV=test
-process.env.NODE_ENV='test';
+process.env.NODE_ENV = 'test';
 
 var request = require('supertest');
 var path = require('path');
@@ -77,6 +77,17 @@ function setup(serverFile, options, onReady, beforeReady) {
     });
 }
 
+function switchServer(server) {
+    try {
+        fs.copySync(
+            path.join(__dirname, 'lib', server),
+            path.join(__dirname, 'lib', 'server-temp.js')
+        );
+    } catch (err) {
+        done(err);
+    }
+}
+
 request = request('http://localhost:8000');
 
 describe('recluster', function() {
@@ -119,13 +130,16 @@ describe('recluster', function() {
         });
     });
 
-    describe('gracefully handle broken script', function() {
-        it('it should throw an error', function() {
-            handler = recluster(path.join(__dirname, 'lib', 'server-broken.js'), defaultOptions);
-            //fiesta, try everything, if at the end everything close it's a win :o
+    describe.only('gracefully handle broken script', function() {
+        it('it should properly reload', function(done) {
+            //put temp as broken
+            switchServer('server-broken.js');
+            handler = recluster(path.join(__dirname, 'lib', 'server-temp.js'), defaultOptions);
             handler.run();
-            handler.reload();
-            handler.terminate();
+            switchServer('server.js');
+            handler.reload(function() {
+                setTimeout(requestExpectHelloWorld200.bind(null, done), 100);
+            });
         });
     });
 
@@ -217,14 +231,7 @@ describe('recluster', function() {
 
         it('old undying workers should not respond', function(done) {
             //copy unclean to temp
-            try {
-                fs.copySync(
-                    path.join(__dirname, 'lib', 'server-unclean.js'),
-                    path.join(__dirname, 'lib', 'server-temp.js')
-                );
-            } catch (err) {
-                done(err);
-            }
+            switchServer('server-unclean.js');
 
             var options = m({}, defaultOptions, {
                 timeout: 1,
@@ -233,14 +240,7 @@ describe('recluster', function() {
 
             setup('server-temp.js', options, function() {
                 // replace classic to temp
-                try {
-                    fs.copySync(
-                        path.join(__dirname, 'lib', 'server.js'),
-                        path.join(__dirname, 'lib', 'server-temp.js')
-                    );
-                } catch (err) {
-                    done(err);
-                }
+                switchServer('server.js');
 
                 var total = 50;
                 var errorCount = 0;
