@@ -65,18 +65,6 @@ function cleanup(cb) {
     cb();
 }
 
-//helper to stay dry
-function setup(serverFile, options, onReady, beforeReady) {
-    onReady = onReady || passthru;
-    beforeReady = beforeReady || passthru;
-    handler = recluster(path.join(__dirname, 'lib', serverFile), options);
-    handler.run();
-    beforeReady();
-    handler.once('ready', function() {
-        onReady();
-    });
-}
-
 function switchServer(server) {
     try {
         fs.copySync(
@@ -92,12 +80,10 @@ request = request('http://localhost:8000');
 
 describe('recluster', function() {
 
-    describe('default', function() {
-        before(function(done) {
-            setup('server.js', defaultOptions, done);
-        });
-
-        it('should have no error', function(done) {
+    it('should properly dispatch requests', function(done) {
+        handler = recluster(path.join(__dirname, 'lib', 'server.js'), defaultOptions);
+        handler.run();
+        handler.once('ready', function() {
             requestExpectHelloWorld200(done);
         });
     });
@@ -108,15 +94,20 @@ describe('recluster', function() {
                 defaultOptions, {
                     readyWhen: 'started'
                 });
-            setup('server.js', options, function() {
+            handler = recluster(path.join(__dirname, 'lib', 'server.js'), options);
+            handler.run();
+            handler.once('ready', function() {
                 requestExpectError(done);
             });
         });
 
         it('should work if waiting for ready when listening', function(done) {
-            setup('server.js', defaultOptions, function() {
+            handler = recluster(path.join(__dirname, 'lib', 'server.js'), defaultOptions);
+            handler.run();
+            requestExpectError();
+            handler.once('ready', function() {
                 requestExpectHelloWorld200(done);
-            }, requestExpectError);
+            });
         });
 
         it("should work if waiting for ready when process says he's ready", function(done) {
@@ -124,13 +115,16 @@ describe('recluster', function() {
                 defaultOptions, {
                     readyWhen: 'ready'
                 });
-            setup('server-manual-ready.js', options, function() {
+            handler = recluster(path.join(__dirname, 'lib', 'server-manual-ready.js'), options);
+            handler.run();
+            requestExpectError();
+            handler.once('ready', function() {
                 requestExpectHelloWorld200(done);
-            }, requestExpectError);
+            });
         });
     });
 
-    describe.only('gracefully handle broken script', function() {
+    describe('gracefully handle broken script', function() {
         it('it should properly reload', function(done) {
             //put temp as broken
             switchServer('server-broken.js');
@@ -159,7 +153,11 @@ describe('recluster', function() {
             var options = m({}, defaultOptions, {
                 timeout: 0.1
             });
-            setup('server.js', options, done);
+            handler = recluster(path.join(__dirname, 'lib', 'server.js'), options);
+            handler.run();
+            handler.once('ready', function() {
+                done();
+            });
         });
 
         it('should gracefully reload in the middle of a request', function(done) {
@@ -238,7 +236,9 @@ describe('recluster', function() {
                 workers: 2
             });
 
-            setup('server-temp.js', options, function() {
+            handler = recluster(path.join(__dirname, 'lib', 'server-temp.js'), options);
+            handler.run();
+            handler.once('ready', function() {
                 // replace classic to temp
                 switchServer('server.js');
 
@@ -276,7 +276,9 @@ describe('recluster', function() {
 
     describe('arguments', function() {
         it('without', function(done) {
-            setup('server-with-args.js', defaultOptions, function() {
+            handler = recluster(path.join(__dirname, 'lib', 'server-with-args.js'), defaultOptions);
+            handler.run();
+            handler.once('ready', function() {
                 requestExpectHelloWorld200(done);
             });
         });
@@ -285,7 +287,9 @@ describe('recluster', function() {
             var options = m({}, defaultOptions, {
                 args: ['fail']
             });
-            setup('server-with-args.js', options, function() {
+            handler = recluster(path.join(__dirname, 'lib', 'server-with-args.js'), options);
+            handler.run();
+            handler.once('ready', function() {
                 request.get('/')
                     .expect(404)
                     .end(function(err, res) {
@@ -346,7 +350,9 @@ describe('recluster', function() {
 
     describe('termination', function() {
         it('undying server should still get killed because of timeout', function(done) {
-            setup('server-die-halfsec.js', termOptions, function() {
+            handler = recluster(path.join(__dirname, 'lib', 'server-die-halfsec.js'), termOptions);
+            handler.run();
+            handler.once('ready', function() {
                 var workerPids1 = pids();
                 assert.equal(workerPids1.length, 2);
 
@@ -367,7 +373,9 @@ describe('recluster', function() {
         it('should handle disconnecting servers', function(done) {
             this.timeout(3000);
 
-            setup('server-disconnect-halfsec.js', termOptions, function() {
+            handler = recluster(path.join(__dirname, 'lib', 'server-disconnect-halfsec.js'), termOptions);
+            handler.run();
+            handler.once('ready', function() {
                 assert.equal(pids().length, 2);
 
                 setTimeout(function() {
@@ -387,7 +395,9 @@ describe('recluster', function() {
         it('should handle the disconnect command', function(done) {
             this.timeout(3000);
 
-            setup('server-msg-disconnect-halfsec.js', termOptions, function() {
+            handler = recluster(path.join(__dirname, 'lib', 'server-msg-disconnect-halfsec.js'), termOptions);
+            handler.run();
+            handler.once('ready', function() {
                 assert.equal(pids().length, 2);
 
                 setTimeout(function() {
@@ -405,9 +415,9 @@ describe('recluster', function() {
         });
 
         it('should stop when asked to stop', function(done) {
-            this.timeout(3000);
-
-            setup('server.js', termOptions, function() {
+            handler = recluster(path.join(__dirname, 'lib', 'server.js'), termOptions);
+            handler.run();
+            handler.once('ready', function() {
                 handler.stop();
                 cleanup(done);
             });
