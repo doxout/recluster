@@ -4,7 +4,8 @@
   "description": "Clustering library with support for zero-downtime reloading",
   "main": "index.js",
   "scripts": {
-    "test": "tap test/index.js"
+    "test": "tap test/*.js",
+    "lint": "eslint ."
   },
   "repository": {
     "type": "git",
@@ -26,6 +27,9 @@
     "test": "test"
   },
   "devDependencies": {
-    "tap": "~0.4.1"
+    "debug": "^2.2.0",
+    "eslint": "^0.22.1",
+    "supertest": "^1.0.1",
+    "tap": "^1.2.0"
   }
 }

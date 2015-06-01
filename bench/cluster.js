@@ -1,5 +1,8 @@
-var nlb = require('../index.js');
+var recluster = require('..');
+var path = require('path');
 
-var cluster = nlb(__dirname + '/server.js');
+recluster.configure({
+    exec: path.resolve(__dirname, '/server.js')
+});
 
-cluster.run();
+recluster.run();
