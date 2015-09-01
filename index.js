@@ -249,7 +249,7 @@ module.exports = function(file, opt) {
         for (var i = 0; i < opt.workers; ++i) fork(i);
     };
 
-    self.terminate = function() {
+    self.terminate = function(callback) {
         self.stop()
         self.workers.forEach(function (worker) {
             if (worker.kill)
@@ -257,6 +257,7 @@ module.exports = function(file, opt) {
             else
                 worker.destroy();
         });
+        cluster.disconnect(callback);
     }
 
     self.stop = function() {

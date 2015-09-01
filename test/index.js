@@ -43,6 +43,16 @@ runTest("manual ready signal",
 });
 
 
+runTest("callback on terminate", {workers: 2, file: 'server-ok.js', timeout: 1}, function (t) {
+    lib.setServer('server-ok.js', function (err) {
+        t.ok(!err, "server should start");
+        t.equal(lib.balancer.workers.length, 2, "2 workers present");
+        lib.balancer.terminate(function () {
+            t.equal(lib.balancer.workers.length, 0, "0 workers present");
+            t.end();
+        });
+    });
+});
 
 
 runTest("broken server", function(t) {
