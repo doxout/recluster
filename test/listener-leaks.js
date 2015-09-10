@@ -1,11 +1,3 @@
-var nlb = require('../index.js'),
-    path = require('path'),
-    http = require('http'),
-    fs = require('fs'),
-    tap = require('tap');
-
-
-
 var lib = require('./lib/index'),
     runTest = lib.runTest,
     request = lib.request;

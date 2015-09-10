@@ -249,14 +249,23 @@ module.exports = function(file, opt) {
         for (var i = 0; i < opt.workers; ++i) fork(i);
     };
 
-    self.terminate = function() {
+    self.terminate = function(cb) {
         self.stop()
+        cluster.on('exit', allDone);
         self.workers.forEach(function (worker) {
             if (worker.kill)
                 worker.kill('SIGKILL');
             else
                 worker.destroy();
         });
+        allDone()
+        function allDone() {
+            var active = Object.keys(cluster.workers).length
+            if (active === 0) {
+                cluster.removeListener('exit', allDone);
+                cb && cb();
+            }
+        }
     }
 
     self.stop = function() {

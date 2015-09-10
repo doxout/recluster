@@ -58,8 +58,9 @@ function setUp(opt) {
 }
 
 function tearDown(t) {
-    balancer.terminate();
-    t.end();
+    balancer.terminate(function() {
+        t.end();
+    });
 }
 
 
