@@ -8,6 +8,8 @@ var balancer = null;
 
 var serverjs = path.join(__dirname, 'server.js');
 
+http.globalAgent.maxSockets = Infinity;
+
 function request(opt, cb) {
     http.get(opt.url, function(res) {
         if (res.statusCode == 200)
