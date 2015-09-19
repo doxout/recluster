@@ -34,6 +34,10 @@ function pids() {
     return lib.balancer.workers.map(function(w) { return w.process.pid; });
 }
 
+function activeCount() {
+    return Object.keys(require('cluster').workers).length
+}
+
 var termSettings = {
     respawn: 0.001, backoff: 0.001, workers: 2, timeout: 0.3,
     readyWhen: 'listening'
@@ -57,6 +61,7 @@ runTest("dying server", termSettings, function(t) {
     setTimeout(function() {
         var wrkpids2 = pids();
         t.equal(wrkpids2.length, 2, "2 workers should be active");
+        t.equal(activeCount(), 2, "2 workers should be active according to cluster");
         t.notEquals(wrkpids[0], wrkpids2[0], "workers have been replaced");
         t.notEquals(wrkpids[1], wrkpids2[1], "workers have been replaced");
         t.end();
@@ -71,9 +76,11 @@ runTest("IPC-disconnecting server", discSettings, function(t) {
     var wrkpids = pids();
     setTimeout(function() {
         t.equal(pids().length, 4, "4 workers present, 2 disconnected");
+        t.equal(activeCount(), 4, "4 workers should be active according to cluster");
     }, timeoutWorker + timeToSpawn);
     setTimeout(function() {
         t.equal(pids().length, 2, "2 workers present");
+        t.equal(activeCount(), 2, "2 workers should be active according to cluster");
         t.end();
     }, timeoutWorker + timeToSpawn + timeoutKill + timeToKill);
 
@@ -86,9 +93,11 @@ runTest("IPC-disconnecting server via msg", dmsgSettings, function(t) {
     var wrkpids = pids();
     setTimeout(function() {
         t.equal(pids().length, 4, "4 workers present, 2 disconnected");
+        t.equal(activeCount(), 4, "4 workers should be active according to cluster");
     }, timeoutWorker + timeToSpawn);
     setTimeout(function() {
         t.equal(pids().length, 2, "2 workers present");
+        t.equal(activeCount(), 2, "2 workers should be active according to cluster");
         t.end();
     }, timeoutWorker + timeToSpawn + timeoutKill + timeToKill);
 
@@ -102,6 +111,7 @@ runTest("stopped cluster", termSettings, function(t) {
     setTimeout(function() {
         var wrkpids2 = pids();
         t.equal(wrkpids2.length, 0, "0 workers should be active");
+        t.equal(activeCount(), 0, "0 workers should be active according to cluster");
         t.end();
     }, timeoutWorker + timeToSpawn);
 });

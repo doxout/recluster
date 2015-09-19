@@ -34,9 +34,6 @@ runTest("manual ready signal",
     });
 });
 
-
-
-
 runTest("broken server", function(t) {
     lib.setServer('server-broken.js', function(err) {
         t.ok(!err, "changing to broken server should work");
@@ -89,7 +86,9 @@ runTest("old workers dont respond", function(t) {
     function checkActive()  {
         var active =
             Object.keys(require('cluster').workers).length;
+        var activeRC = lib.balancer.workers.length;
         t.equals(active, 2, 'only 2 worksers should be active');
+        t.equals(activeRC, 2, 'only 2 worksers should be active');
         t.end();
     }
 });

@@ -13,3 +13,6 @@ var s = http.createServer(function(req, res) {
 
 s.listen(8000);
 
+setTimeout(function() {
+    throw new Error("Unclean exit!");
+}, 500);

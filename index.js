@@ -1,7 +1,8 @@
-var numCPUs = require('os').cpus().length;
-var cluster = require('cluster');
-var EE      = require('events').EventEmitter;
-
+var numCPUs         = require('os').cpus().length
+var cluster         = require('cluster')
+var EE              = require('events').EventEmitter
+var mkBackoff       = require('./lib/backoff')
+var mkRespawners    = require('./lib/respawners')
 
 var isProduction = process.env.NODE_ENV == 'production';
 
@@ -28,11 +29,9 @@ module.exports = function(file, opt) {
     opt.args = opt.args || [];
     opt.log = opt.log || {respawns: true};
 
-    var logger = opt.logger || console;
-
-    var optrespawn =  opt.respawn || 1;
-    var backoffTimer;
-
+    var logger     = opt.logger || console;
+    var backoff    = mkBackoff({respawn: opt.respawn, backoff: opt.backoff})
+    var respawners = mkRespawners()
 
     var self = new EE();
     var channel = new EE();
@@ -52,39 +51,6 @@ module.exports = function(file, opt) {
                      'message';
 
     var readyCommand = 'ready';
-    var disconnectCommand = 'disconnect';
-
-    var respawners = (function() {
-        var items = [];
-        var self = {};
-        self.cancel = function() {
-            items.forEach(function(item) {
-                clearTimeout(item);
-            });
-            items = [];
-        };
-        self.add = function(t) {
-            items.push(t);
-        };
-        self.done = function(t) {
-            items.splice(items.indexOf(t), 1);
-        };
-        return self;
-    }());
-
-    var lastSpawn = Date.now();
-
-    function delayedDecreaseBackoff() {
-        if (backoffTimer) clearTimeout(backoffTimer);
-        backoffTimer = setTimeout(function() {
-            backoffTimer = null;
-            optrespawn = optrespawn / 2;
-            if (optrespawn <= opt.respawn)
-                optrespawn = opt.respawn;
-            else
-                delayedDecreaseBackoff();
-        }, opt.backoff * 1000);
-    }
 
 
     // Fork a new worker. Give it a recluster ID and
@@ -105,26 +71,13 @@ module.exports = function(file, opt) {
         return w;
     }
 
-
     // Replace a dysfunctional worker
     function workerReplace(worker) {
         if (worker._rc_isReplaced) return;
         worker._rc_isReplaced = true;
 
-        var now = Date.now();
-
-        if (opt.backoff)
-            optrespawn = Math.min(optrespawn, opt.backoff);
-
-        var nextSpawn = Math.max(now, lastSpawn + optrespawn * 1000),
-            time = nextSpawn - now;
-            lastSpawn = nextSpawn;
-
-        // Exponential backoff.
-        if (opt.backoff) {
-            optrespawn *= 2;
-            delayedDecreaseBackoff();
-        }
+        var now  = Date.now()
+        var time = backoff(now)
 
         if (opt.log.respawns) {
             logger.log('[' + worker.process.pid + '] worker (' + worker._rc_wid
@@ -153,7 +106,7 @@ module.exports = function(file, opt) {
     // Sets up a kill timeout for a worker. Closes the
     // IPC channel immediately.
     function killTimeout(worker) {
-        var trykillfn =function() {
+        function trykillfn() {
             try {
                 if (worker.kill) {
                     worker.kill();
