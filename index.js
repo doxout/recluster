@@ -41,7 +41,12 @@ module.exports = function(file, opt) {
 
     var workers = [];
 
-    var activeWorkers = [];
+    var activeWorkers = {length: opt.workers};
+    function deactivate(w) {
+        if (activeWorkers[w._rc_wid] == w) {
+            activeWorkers[w._rc_wid] = null;
+        }
+    }
 
     function emit() {
         channel.emit.apply(self, arguments);
@@ -67,7 +72,7 @@ module.exports = function(file, opt) {
         });
         w.process.on('exit', function() {
             utils.removeFrom(workers, w);
-            utils.removeFrom(activeWorkers, w)
+            deactivate(w);
         });
         workers.push(w);
         return w;
@@ -78,7 +83,7 @@ module.exports = function(file, opt) {
         if (worker._rc_isReplaced) return;
         worker._rc_isReplaced = true;
 
-        utils.removeFrom(activeWorkers, worker)
+        deactivate(worker);
 
         var now  = Date.now()
         var time = backoff(now)
@@ -133,7 +138,7 @@ module.exports = function(file, opt) {
             process.nextTick(trykillfn);
         }
 
-        utils.removeFrom(activeWorkers, worker)
+        deactivate(worker);
     }
 
 
@@ -171,7 +176,7 @@ module.exports = function(file, opt) {
         });
         // When a worker becomes ready, add it to the active list
         channel.on('ready', function workerReady(w) {
-            activeWorkers.push(w);
+            activeWorkers[w._rc_wid] = w;
         })
 
     }

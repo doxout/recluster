@@ -35,7 +35,14 @@ function pids() {
 }
 
 function activePids() {
-    return lib.balancer.activeWorkers().map(function(w) { return w.process.pid; });
+    var pids = [];
+    var aw = lib.balancer.activeWorkers();
+    for (var key in aw) {
+        if (key != 'length' && aw[key]) {
+            pids.push(aw[key].process.pid);
+        }
+    }
+    return pids;
 }
 function activeCount() {
     return Object.keys(require('cluster').workers).length

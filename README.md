@@ -110,11 +110,13 @@ Terminates the entire cluster and removes all listeners.
 
 ### cluster.activeWorkers()
 
-Returns a list of the workers that are currently serving requests
+Returns a hash of all worker slots (0 <= WORKER_ID < N). If a worker isn't
+available at that slot, the value in the hash is null or undefined. Otherwise,
+the value will be a worker object that is ready to serve requests.
 
 ### cluster.workers()
 
-Returns a list of all the workers, including those that are not
+Returns an array of all the workers, including those that are not
 yet ready or those that will be replaced.
 
 # worker cleanup
