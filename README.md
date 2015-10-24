@@ -149,7 +149,7 @@ balancer that distributes the sockets based on the client IP (instead of the
 regular round-robin one)
 
 
-[sticky-listen](https://github.com/spion/sticky-listen)
+[sticky-listen]: (https://github.com/spion/sticky-listen)
 
 ![Bitdeli](https://d2weczhvl823v0.cloudfront.net/spion/recluster/trend.png)
 
