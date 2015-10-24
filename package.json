@@ -16,7 +16,10 @@
     "cluster",
     "zero",
     "downtime",
-    "reload"
+    "reload",
+    "sticky",
+    "websockets",
+    "socket.io"
   ],
   "author": "spion",
   "license": "MIT",
