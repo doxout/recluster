@@ -31,9 +31,12 @@ function extend(opt, add) {
 }
 
 function pids() {
-    return lib.balancer.workers.map(function(w) { return w.process.pid; });
+    return lib.balancer.workers().map(function(w) { return w.process.pid; });
 }
 
+function activePids() {
+    return lib.balancer.activeWorkers().map(function(w) { return w.process.pid; });
+}
 function activeCount() {
     return Object.keys(require('cluster').workers).length
 }
@@ -59,8 +62,13 @@ termSettings.file = 'server-die-halfsec.js';
 runTest("dying server", termSettings, function(t) {
     var wrkpids = pids();
     setTimeout(function() {
+        t.equal(activePids().length, 2, "2 workers serving requests");
+    }, timeToSpawn);
+    setTimeout(function() {
         var wrkpids2 = pids();
+        var wrkpidsActive = activePids();
         t.equal(wrkpids2.length, 2, "2 workers should be active");
+        t.equal(wrkpidsActive.length, 0, "0 workers serving requests");
         t.equal(activeCount(), 2, "2 workers should be active according to cluster");
         t.notEquals(wrkpids[0], wrkpids2[0], "workers have been replaced");
         t.notEquals(wrkpids[1], wrkpids2[1], "workers have been replaced");
@@ -73,13 +81,17 @@ var discSettings = extend(
     termSettings, {file: 'server-disconnect-halfsec.js'});
 
 runTest("IPC-disconnecting server", discSettings, function(t) {
-    var wrkpids = pids();
+    setTimeout(function() {
+        t.equal(activePids().length, 2, "2 workers serving requests");
+    }, timeToSpawn);
     setTimeout(function() {
         t.equal(pids().length, 4, "4 workers present, 2 disconnected");
+        t.equal(activePids().length, 0, "0 workers serving requests");
         t.equal(activeCount(), 4, "4 workers should be active according to cluster");
     }, timeoutWorker + timeToSpawn);
     setTimeout(function() {
         t.equal(pids().length, 2, "2 workers present");
+        t.equal(activePids().length, 2, "2 workers serving requests");
         t.equal(activeCount(), 2, "2 workers should be active according to cluster");
         t.end();
     }, timeoutWorker + timeToSpawn + timeoutKill + timeToKill);
@@ -90,13 +102,17 @@ var dmsgSettings = extend(
     termSettings, {file: 'server-msg-disconnect-halfsec.js'});
 
 runTest("IPC-disconnecting server via msg", dmsgSettings, function(t) {
-    var wrkpids = pids();
+    setTimeout(function() {
+        t.equal(activePids().length, 2, "2 workers serving requests");
+    }, timeToSpawn);
     setTimeout(function() {
         t.equal(pids().length, 4, "4 workers present, 2 disconnected");
+        t.equal(activePids().length, 0, "0 workers serving requests");
         t.equal(activeCount(), 4, "4 workers should be active according to cluster");
     }, timeoutWorker + timeToSpawn);
     setTimeout(function() {
         t.equal(pids().length, 2, "2 workers present");
+        t.equal(activePids().length, 2, "2 workers serving requests");
         t.equal(activeCount(), 2, "2 workers should be active according to cluster");
         t.end();
     }, timeoutWorker + timeToSpawn + timeoutKill + timeToKill);
@@ -104,13 +120,12 @@ runTest("IPC-disconnecting server via msg", dmsgSettings, function(t) {
 });
 
 runTest("stopped cluster", termSettings, function(t) {
-    var wrkpids = pids();
     setTimeout(function() {
         lib.balancer.stop();
     }, timeToSpawn);
     setTimeout(function() {
-        var wrkpids2 = pids();
-        t.equal(wrkpids2.length, 0, "0 workers should be active");
+        t.equal(pids().length, 0, "0 workers should be active");
+        t.equal(activePids().length, 0, "0 workers serving requests");
         t.equal(activeCount(), 0, "0 workers should be active according to cluster");
         t.end();
     }, timeoutWorker + timeToSpawn);

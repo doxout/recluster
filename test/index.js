@@ -83,12 +83,11 @@ runTest("old workers dont respond", function(t) {
         for (var k = 0; k < n; ++k)
             request({url: 'http://localhost:8000/1'}, requestComplete);
     }
-    function checkActive()  {
-        var active =
-            Object.keys(require('cluster').workers).length;
-        var activeRC = lib.balancer.workers.length;
-        t.equals(active, 2, 'only 2 worksers should be active');
-        t.equals(activeRC, 2, 'only 2 worksers should be active');
+    function checkActive() {
+        var active = Object.keys(require('cluster').workers).length;
+        var activeRC = lib.balancer.workers().length;
+        t.equals(active, 2, 'only 2 workers should be active');
+        t.equals(activeRC, 2, 'only 2 workers should be active');
         t.end();
     }
 });
@@ -102,7 +101,7 @@ runTest("server with an endless setInterval", function(t) {
             }), 10);
         });
         function checkDead() {
-            t.equal(lib.balancer.workers.length, 2, "only 2 workers should be active");
+            t.equal(lib.balancer.workers().length, 2, "only 2 workers should be active");
             t.end(); // this test will never end
         }
     })

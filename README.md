@@ -108,6 +108,15 @@ for `opt.timeout` seconds after reload
 
 Terminates the entire cluster and removes all listeners.
 
+### cluster.activeWorkers()
+
+Returns a list of the workers that are currently serving requests
+
+### cluster.workers()
+
+Returns a list of all the workers, including those that are not
+yet ready or those that will be replaced.
+
 # worker cleanup
 
 A server worker can gracefully exit by cleaning up in the 'close' event

@@ -3,6 +3,7 @@ var cluster         = require('cluster')
 var EE              = require('events').EventEmitter
 var mkBackoff       = require('./lib/backoff')
 var mkRespawners    = require('./lib/respawners')
+var utils           = require('./lib/util')
 
 var isProduction = process.env.NODE_ENV == 'production';
 
@@ -38,7 +39,9 @@ module.exports = function(file, opt) {
 
     channel.setMaxListeners(opt.workers * 4 + 10);
 
-    self.workers = [];
+    var workers = [];
+
+    var activeWorkers = [];
 
     function emit() {
         channel.emit.apply(self, arguments);
@@ -63,11 +66,10 @@ module.exports = function(file, opt) {
             emit('message', w, message);
         });
         w.process.on('exit', function() {
-            var windex = self.workers.indexOf(w);
-            if (windex >= 0)
-                self.workers.splice(windex, 1);
+            utils.removeFrom(workers, w);
+            utils.removeFrom(activeWorkers, w)
         });
-        self.workers.push(w);
+        workers.push(w);
         return w;
     }
 
@@ -75,6 +77,8 @@ module.exports = function(file, opt) {
     function workerReplace(worker) {
         if (worker._rc_isReplaced) return;
         worker._rc_isReplaced = true;
+
+        utils.removeFrom(activeWorkers, worker)
 
         var now  = Date.now()
         var time = backoff(now)
@@ -118,7 +122,7 @@ module.exports = function(file, opt) {
 
         if (opt.timeout > 0) {
             var timeout = setTimeout(trykillfn, opt.timeout * 1000);
-            worker.on('exit', clearTimeout.bind(this, timeout));
+            worker.once('exit', clearTimeout.bind(this, timeout));
             // possible leftover worker that has no channel
             // estabilished will throw. Ignore.
             try {
@@ -129,7 +133,9 @@ module.exports = function(file, opt) {
             process.nextTick(trykillfn);
         }
 
+        utils.removeFrom(activeWorkers, worker)
     }
+
 
     // Redirect most events
     function workerListening(w, adr) { emit('listening', w, adr); }
@@ -163,6 +169,10 @@ module.exports = function(file, opt) {
             if (arg && arg.cmd === 'disconnect')
                 workerReplaceTimeoutTerminate(w);
         });
+        // When a worker becomes ready, add it to the active list
+        channel.on('ready', function workerReady(w) {
+            activeWorkers.push(w);
+        })
 
     }
 
@@ -178,10 +188,10 @@ module.exports = function(file, opt) {
             };
         }
 
-        self.workers.forEach(function(worker) {
+        workers.forEach(function(worker) {
             var id = worker.id;
 
-          var stopOld = allReady(function() {
+            var stopOld = allReady(function() {
                 // dont respawn this worker. It has already been replaced.
                 worker._rc_isReplaced = true;
 
@@ -205,7 +215,7 @@ module.exports = function(file, opt) {
     self.terminate = function(cb) {
         self.stop()
         cluster.on('exit', allDone);
-        self.workers.forEach(function (worker) {
+        workers.forEach(function (worker) {
             if (worker.kill)
                 worker.kill('SIGKILL');
             else
@@ -230,6 +240,14 @@ module.exports = function(file, opt) {
         respawners.cancel();
 
         channel.removeAllListeners();
+    }
+
+    self.workers = function() {
+        return workers;
+    }
+
+    self.activeWorkers = function() {
+        return activeWorkers;
     }
 
     return self;
