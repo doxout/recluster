@@ -217,12 +217,16 @@ module.exports = function(file, opt) {
         for (var i = 0; i < opt.workers; ++i) fork(i);
     };
 
-    self.terminate = function(cb) {
+    self.terminate = function(signal, cb) {
+        var hasCustomSignal = typeof(signal) === 'string';
+        cb = hasCustomSignal ? cb : signal;
+        signal = hasCustomSignal ? signal : 'SIGKILL';
         self.stop()
         cluster.on('exit', allDone);
         workers.forEach(function (worker) {
+            worker = worker.process || worker;
             if (worker.kill)
-                worker.kill('SIGKILL');
+                worker.kill(signal);
             else
                 worker.destroy();
         });
