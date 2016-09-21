@@ -1,6 +1,6 @@
 {
   "name": "recluster",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Clustering library with support for zero-downtime reloading",
   "main": "index.js",
   "scripts": {
