@@ -247,6 +247,7 @@ module.exports = function(file, opt) {
     self.terminate = function() {
         self.stop()
         self.workers.forEach(function (worker) {
+            worker = worker.process || worker;
             if (worker.kill)
                 worker.kill('SIGKILL');
             else
