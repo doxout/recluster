@@ -131,10 +131,10 @@ module.exports = function(file, opt) {
             // possible leftover worker that has no channel
             // estabilished will throw. Ignore.
             try {
-				if (worker.isConnected()) {
-					worker.send({cmd: 'disconnect'});
-					worker.disconnect();
-				}
+                if (worker.isConnected()) {
+                    worker.send({cmd: 'disconnect'});
+                    worker.disconnect();
+                }
             } catch (e) { }
         } else {
             process.nextTick(trykillfn);
